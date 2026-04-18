@@ -28,6 +28,10 @@ const userSchema = new mongoose.Schema({
         enum: ['user', 'admin', 'superadmin'],
         default: 'user'
     },
+    bestScore: {
+        type: Number,
+        default: 0
+    },
     resetPasswordToken: String,
     resetPasswordExpires: Date,
     refreshTokens: [{ type: String }]

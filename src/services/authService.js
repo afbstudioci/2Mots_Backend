@@ -1,14 +1,19 @@
 //src/services/authService.js
 const User = require('../models/User');
 const jwt = require('jsonwebtoken');
+const { jwtSecret, jwtRefreshSecret, jwtExpiresIn, jwtRefreshExpiresIn, adminMail } = require('../config/env');
 
 const generateTokens = (userId) => {
-    const accessToken = jwt.sign({ id: userId }, process.env.JWT_SECRET, {
-        expiresIn: process.env.JWT_EXPIRES_IN || '15m'
+    if (!jwtSecret || !jwtRefreshSecret) {
+        throw new Error('Erreur de configuration serveur : Cles JWT manquantes');
+    }
+
+    const accessToken = jwt.sign({ id: userId }, jwtSecret, {
+        expiresIn: jwtExpiresIn
     });
 
-    const refreshToken = jwt.sign({ id: userId }, process.env.JWT_REFRESH_SECRET, {
-        expiresIn: process.env.JWT_REFRESH_EXPIRES_IN || '7d'
+    const refreshToken = jwt.sign({ id: userId }, jwtRefreshSecret, {
+        expiresIn: jwtRefreshExpiresIn
     });
 
     return { accessToken, refreshToken };
@@ -20,9 +25,8 @@ exports.registerUser = async (login, email, password) => {
         throw new Error('Un utilisateur avec cet email ou ce pseudo existe deja');
     }
 
-    // Determination du role : Si c'est l'email admin, on lui donne le plein pouvoir
     let assignedRole = 'user';
-    if (process.env.ADMIN_MAIL && email.toLowerCase() === process.env.ADMIN_MAIL.toLowerCase()) {
+    if (adminMail && email.toLowerCase() === adminMail.toLowerCase()) {
         assignedRole = 'superadmin';
     }
 
@@ -38,7 +42,6 @@ exports.registerUser = async (login, email, password) => {
     newUser.refreshTokens.push(refreshToken);
     await newUser.save({ validateBeforeSave: false });
 
-    // On ne renvoie pas le mot de passe ni les tokens de rafraichissement dans la reponse publique
     const userResponse = newUser.toObject();
     delete userResponse.password;
     delete userResponse.refreshTokens;
@@ -55,8 +58,7 @@ exports.loginUser = async (loginIdentifier, password) => {
         throw new Error('Identifiants incorrects');
     }
 
-    // Mise a niveau silencieuse : si l'admin se connecte mais n'avait pas encore le role (ex: variable ajoutee apres coup)
-    if (process.env.ADMIN_MAIL && user.email.toLowerCase() === process.env.ADMIN_MAIL.toLowerCase() && user.role !== 'superadmin') {
+    if (adminMail && user.email.toLowerCase() === adminMail.toLowerCase() && user.role !== 'superadmin') {
         user.role = 'superadmin';
         await user.save({ validateBeforeSave: false });
     }
@@ -73,18 +75,20 @@ exports.loginUser = async (loginIdentifier, password) => {
     return { user: userResponse, accessToken, refreshToken };
 };
 
-exports.refreshUserToken = async (refreshToken) => {
+exports.refreshUserToken = async (currentRefreshToken) => {
     try {
-        const decoded = jwt.verify(refreshToken, process.env.JWT_REFRESH_SECRET);
+        if (!jwtRefreshSecret) throw new Error('Configuration serveur invalide');
+
+        const decoded = jwt.verify(currentRefreshToken, jwtRefreshSecret);
         
         const user = await User.findById(decoded.id);
-        if (!user || !user.refreshTokens.includes(refreshToken)) {
+        if (!user || !user.refreshTokens.includes(currentRefreshToken)) {
             throw new Error('Jeton de rafraichissement invalide ou expire');
         }
 
         const { accessToken, refreshToken: newRefreshToken } = generateTokens(user._id);
 
-        user.refreshTokens = user.refreshTokens.filter(token => token !== refreshToken);
+        user.refreshTokens = user.refreshTokens.filter(token => token !== currentRefreshToken);
         user.refreshTokens.push(newRefreshToken);
         await user.save({ validateBeforeSave: false });
 
@@ -100,4 +104,8 @@ exports.logoutUser = async (userId) => {
         user.refreshTokens = [];
         await user.save({ validateBeforeSave: false });
     }
+};
+
+exports.requestPasswordReset = async (email) => {
+    return null;
 };

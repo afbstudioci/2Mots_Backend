@@ -15,10 +15,12 @@ const allowedOrigins = process.env.ALLOWED_ORIGINS
     ? process.env.ALLOWED_ORIGINS.split(',') 
     : ['http://localhost:8081', 'http://localhost:3000'];
 
+// Configuration CORS robuste pour Web et Mobile
 app.use(cors({
     origin: function (origin, callback) {
-        const isDev = process.env.NODE_ENV !== 'production';
-        if (!origin || isDev || allowedOrigins.indexOf(origin) !== -1) {
+        // En mobile (React Native/Expo), l'origin est souvent absente (!origin)
+        // Si allowedOrigins contient '*', on autorise de force (pratique en dev)
+        if (!origin || allowedOrigins.includes('*') || allowedOrigins.includes(origin)) {
             callback(null, true);
         } else {
             callback(new Error('Non autorise par les regles CORS'));
