@@ -60,7 +60,8 @@ app.use((err, req, res, next) => {
     });
 });
 
-app.use('*', (req, res) => {
+// Correction de l'architecture : on omet le chemin pour attraper silencieusement le reste
+app.use((req, res) => {
     res.status(404).json({ status: 'fail', message: 'Route non trouvee sur ce serveur' });
 });
 
