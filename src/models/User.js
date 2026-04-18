@@ -37,17 +37,14 @@ const userSchema = new mongoose.Schema({
     refreshTokens: [{ type: String }]
 }, { timestamps: true });
 
-// Middleware pour hasher le mot de passe avant la sauvegarde
-userSchema.pre('save', async function(next) {
-    if (!this.isModified('password')) return next();
+// Middleware pour hasher le mot de passe avant la sauvegarde (Refactorisé Mongoose 9+)
+userSchema.pre('save', async function() {
+    // Si le mot de passe n'est pas modifié, on sort de la fonction simplement
+    if (!this.isModified('password')) return;
     
-    try {
-        const salt = await bcrypt.genSalt(12);
-        this.password = await bcrypt.hash(this.password, salt);
-        next();
-    } catch (error) {
-        next(error);
-    }
+    // Le hashage se fait de manière asynchrone, sans avoir besoin d'appeler next()
+    const salt = await bcrypt.genSalt(12);
+    this.password = await bcrypt.hash(this.password, salt);
 });
 
 // Methode pour comparer les mots de passe
