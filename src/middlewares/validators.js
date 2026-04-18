@@ -1,7 +1,8 @@
+//src/middlewares/validators.js
 const { z } = require('zod');
 
 const registerSchema = z.object({
-    username: z.string()
+    login: z.string()
         .min(3, 'Le pseudo doit faire au moins 3 caracteres')
         .max(20, 'Le pseudo ne doit pas depasser 20 caracteres')
         .trim(),
