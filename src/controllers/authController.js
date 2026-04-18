@@ -14,8 +14,9 @@ const sendTokenResponse = (res, statusCode, result) => {
 
 exports.register = async (req, res) => {
     try {
-        const { username, email, password } = req.body;
-        const result = await authService.registerUser(username, email, password);
+        // Correction : Utilisation de 'login' pour correspondre au validateur et au modele
+        const { login, email, password } = req.body;
+        const result = await authService.registerUser(login, email, password);
         sendTokenResponse(res, 201, result);
     } catch (error) {
         res.status(400).json({ status: 'fail', message: error.message });
