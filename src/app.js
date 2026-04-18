@@ -47,7 +47,7 @@ app.use((err, req, res, next) => {
 });
 
 // Gestion des routes non trouvées (404)
-app.use('*', (req, res) => {
+app.use((req, res) => {
     res.status(404).json({ status: 'fail', message: 'Route non trouvee' });
 });
 
