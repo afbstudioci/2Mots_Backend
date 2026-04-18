@@ -1,49 +1,55 @@
+//src/models/User.js
 const mongoose = require('mongoose');
 const bcrypt = require('bcryptjs');
 
 const userSchema = new mongoose.Schema({
-    username: { 
+    login: { 
         type: String, 
-        required: [true, 'Le pseudo est obligatoire'],
+        required: [true, 'Le pseudo est obligatoire'], 
         unique: true,
         trim: true,
-        minlength: 3,
-        maxlength: 20
+        minlength: [3, 'Le pseudo doit contenir au moins 3 caracteres']
     },
     email: { 
         type: String, 
-        required: [true, 'L\'email est obligatoire'],
+        required: [true, 'L\'email est obligatoire'], 
         unique: true,
-        trim: true,
         lowercase: true,
-        match: [/^\S+@\S+\.\S+$/, 'Veuillez fournir un email valide']
+        trim: true
     },
     password: { 
         type: String, 
         required: [true, 'Le mot de passe est obligatoire'],
-        minlength: 8,
+        minlength: [8, 'Le mot de passe doit contenir au moins 8 caracteres'],
         select: false 
     },
-    bestScore: { 
-        type: Number, 
-        default: 0 
+    role: {
+        type: String,
+        enum: ['user', 'admin', 'superadmin'],
+        default: 'user'
     },
-    refreshTokens: [{
-        token: { type: String, required: true }
-    }]
-}, {
-    timestamps: true
-});
+    resetPasswordToken: String,
+    resetPasswordExpires: Date,
+    refreshTokens: [{ type: String }]
+}, { timestamps: true });
 
+// Middleware pour hasher le mot de passe avant la sauvegarde
 userSchema.pre('save', async function(next) {
     if (!this.isModified('password')) return next();
-    const salt = await bcrypt.genSalt(12);
-    this.password = await bcrypt.hash(this.password, salt);
-    next();
+    
+    try {
+        const salt = await bcrypt.genSalt(12);
+        this.password = await bcrypt.hash(this.password, salt);
+        next();
+    } catch (error) {
+        next(error);
+    }
 });
 
-userSchema.methods.comparePassword = async function(candidatePassword) {
-    return await bcrypt.compare(candidatePassword, this.password);
+// Methode pour comparer les mots de passe
+userSchema.methods.comparePassword = async function(candidatePassword, userPassword) {
+    return await bcrypt.compare(candidatePassword, userPassword);
 };
 
-module.exports = mongoose.model('User', userSchema);
+const User = mongoose.model('User', userSchema);
+module.exports = User;

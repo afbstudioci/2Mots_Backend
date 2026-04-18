@@ -1,88 +1,103 @@
-const jwt = require('jsonwebtoken');
-const crypto = require('crypto');
+//src/services/authService.js
 const User = require('../models/User');
-const { jwtSecret, jwtRefreshSecret } = require('../config/env');
+const jwt = require('jsonwebtoken');
 
 const generateTokens = (userId) => {
-    const accessToken = jwt.sign({ id: userId }, jwtSecret, { expiresIn: '15m' });
-    const refreshToken = jwt.sign({ id: userId }, jwtRefreshSecret, { expiresIn: '180d' });
+    const accessToken = jwt.sign({ id: userId }, process.env.JWT_SECRET, {
+        expiresIn: process.env.JWT_EXPIRES_IN || '15m'
+    });
+
+    const refreshToken = jwt.sign({ id: userId }, process.env.JWT_REFRESH_SECRET, {
+        expiresIn: process.env.JWT_REFRESH_EXPIRES_IN || '7d'
+    });
+
     return { accessToken, refreshToken };
 };
 
-const hashToken = (token) => {
-    return crypto.createHash('sha256').update(token).digest('hex');
-};
-
-const registerUser = async (username, email, password) => {
-    const existingUser = await User.findOne({ $or: [{ email }, { username }] });
+exports.registerUser = async (login, email, password) => {
+    const existingUser = await User.findOne({ $or: [{ email }, { login }] });
     if (existingUser) {
-        throw new Error('Ce pseudo ou cet email est deja utilise');
+        throw new Error('Un utilisateur avec cet email ou ce pseudo existe deja');
     }
 
-    const newUser = await User.create({ username, email, password });
+    // Determination du role : Si c'est l'email admin, on lui donne le plein pouvoir
+    let assignedRole = 'user';
+    if (process.env.ADMIN_MAIL && email.toLowerCase() === process.env.ADMIN_MAIL.toLowerCase()) {
+        assignedRole = 'superadmin';
+    }
+
+    const newUser = await User.create({
+        login,
+        email,
+        password,
+        role: assignedRole
+    });
+
     const { accessToken, refreshToken } = generateTokens(newUser._id);
     
-    const hashedRefreshToken = hashToken(refreshToken);
-    newUser.refreshTokens.push({ token: hashedRefreshToken });
+    newUser.refreshTokens.push(refreshToken);
     await newUser.save({ validateBeforeSave: false });
 
-    return { user: { id: newUser._id, username: newUser.username }, accessToken, refreshToken };
+    // On ne renvoie pas le mot de passe ni les tokens de rafraichissement dans la reponse publique
+    const userResponse = newUser.toObject();
+    delete userResponse.password;
+    delete userResponse.refreshTokens;
+
+    return { user: userResponse, accessToken, refreshToken };
 };
 
-const loginUser = async (login, password) => {
-    const user = await User.findOne({ $or: [{ username: login }, { email: login }] }).select('+password');
-    if (!user || !(await user.comparePassword(password))) {
+exports.loginUser = async (loginIdentifier, password) => {
+    const user = await User.findOne({
+        $or: [{ email: loginIdentifier }, { login: loginIdentifier }]
+    }).select('+password');
+
+    if (!user || !(await user.comparePassword(password, user.password))) {
         throw new Error('Identifiants incorrects');
     }
 
+    // Mise a niveau silencieuse : si l'admin se connecte mais n'avait pas encore le role (ex: variable ajoutee apres coup)
+    if (process.env.ADMIN_MAIL && user.email.toLowerCase() === process.env.ADMIN_MAIL.toLowerCase() && user.role !== 'superadmin') {
+        user.role = 'superadmin';
+        await user.save({ validateBeforeSave: false });
+    }
+
     const { accessToken, refreshToken } = generateTokens(user._id);
-    const hashedRefreshToken = hashToken(refreshToken);
-    
-    user.refreshTokens = [{ token: hashedRefreshToken }];
+
+    user.refreshTokens.push(refreshToken);
     await user.save({ validateBeforeSave: false });
 
-    return { user: { id: user._id, username: user.username }, accessToken, refreshToken };
+    const userResponse = user.toObject();
+    delete userResponse.password;
+    delete userResponse.refreshTokens;
+
+    return { user: userResponse, accessToken, refreshToken };
 };
 
-const refreshUserToken = async (currentRefreshToken) => {
-    const decoded = jwt.verify(currentRefreshToken, jwtRefreshSecret);
-    const hashedToken = hashToken(currentRefreshToken);
+exports.refreshUserToken = async (refreshToken) => {
+    try {
+        const decoded = jwt.verify(refreshToken, process.env.JWT_REFRESH_SECRET);
+        
+        const user = await User.findById(decoded.id);
+        if (!user || !user.refreshTokens.includes(refreshToken)) {
+            throw new Error('Jeton de rafraichissement invalide ou expire');
+        }
 
-    const user = await User.findOne({ _id: decoded.id, 'refreshTokens.token': hashedToken });
-    if (!user) {
+        const { accessToken, refreshToken: newRefreshToken } = generateTokens(user._id);
+
+        user.refreshTokens = user.refreshTokens.filter(token => token !== refreshToken);
+        user.refreshTokens.push(newRefreshToken);
+        await user.save({ validateBeforeSave: false });
+
+        return { accessToken, refreshToken: newRefreshToken };
+    } catch (error) {
         throw new Error('Session expiree, veuillez vous reconnecter');
     }
-
-    const { accessToken, refreshToken: newRefreshToken } = generateTokens(user._id);
-    const newHashedToken = hashToken(newRefreshToken);
-
-    user.refreshTokens = user.refreshTokens.filter(t => t.token !== hashedToken);
-    user.refreshTokens.push({ token: newHashedToken });
-    await user.save({ validateBeforeSave: false });
-
-    return { accessToken, refreshToken: newRefreshToken };
 };
 
-const logoutUser = async (user) => {
-    user.refreshTokens = [];
-    await user.save({ validateBeforeSave: false });
-};
-
-const requestPasswordReset = async (email) => {
-    const user = await User.findOne({ email });
-    if (!user) {
-        return null; // Le controller gérera le message neutre pour éviter l'ENUM
+exports.logoutUser = async (userId) => {
+    const user = await User.findById(userId);
+    if (user) {
+        user.refreshTokens = [];
+        await user.save({ validateBeforeSave: false });
     }
-
-    const resetToken = jwt.sign({ id: user._id }, jwtSecret, { expiresIn: '10m' });
-    // En production : envoi d'email ici (ex: SendGrid)
-    return resetToken;
-};
-
-module.exports = {
-    registerUser,
-    loginUser,
-    refreshUserToken,
-    logoutUser,
-    requestPasswordReset
 };
