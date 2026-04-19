@@ -15,11 +15,8 @@ const allowedOrigins = process.env.ALLOWED_ORIGINS
     ? process.env.ALLOWED_ORIGINS.split(',') 
     : ['http://localhost:8081', 'http://localhost:3000'];
 
-// Configuration CORS robuste pour Web et Mobile
 app.use(cors({
     origin: function (origin, callback) {
-        // En mobile (React Native/Expo), l'origin est souvent absente (!origin)
-        // Si allowedOrigins contient '*', on autorise de force (pratique en dev)
         if (!origin || allowedOrigins.includes('*') || allowedOrigins.includes(origin)) {
             callback(null, true);
         } else {
@@ -47,9 +44,20 @@ app.get('/api/health', (req, res) => {
     res.status(200).json({ status: 'success', message: 'Le serveur 2Mots est operationnel et securise' });
 });
 
+// Middleware global de gestion des erreurs (Securise pour la production)
 app.use((err, req, res, next) => {
-    console.error(`[Erreur] ${err.message}`);
+    console.error(`[Erreur Systeme] ${err.message}`);
     
+    // Interception des doublons MongoDB (Code 11000)
+    if (err.code === 11000) {
+        const field = Object.keys(err.keyValue)[0];
+        const fieldName = field === 'login' ? 'pseudo' : field;
+        return res.status(400).json({ 
+            status: 'error', 
+            message: `Ce ${fieldName} est deja utilise.` 
+        });
+    }
+
     if (err.message === 'Non autorise par les regles CORS') {
         return res.status(403).json({ status: 'error', message: 'Origine non autorisee' });
     }
