@@ -1,4 +1,3 @@
-//src/app.js
 const express = require('express');
 const cors = require('cors');
 const helmet = require('helmet');
@@ -30,10 +29,11 @@ app.use(cors({
 
 app.use(express.json({ limit: '10kb' }));
 
+// Limiteur global : tres permissif pour ne pas bloquer les joueurs en pleine partie (3000 requetes)
 const globalLimiter = rateLimit({
     windowMs: 15 * 60 * 1000,
-    max: 150,
-    message: { status: 'error', message: 'Trop de requetes depuis cette IP, veuillez reessayer plus tard.' }
+    max: 3000,
+    message: { status: 'error', message: 'Trafic réseau inhabituel détecté. Veuillez patienter.' }
 });
 app.use('/api', globalLimiter);
 
