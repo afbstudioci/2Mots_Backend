@@ -1,21 +1,23 @@
 //src/controllers/leaderboardController.js
 const User = require('../models/User');
 
-exports.getTopPlayers = async (req, res) => {
+exports.getGlobalLeaderboard = async (req, res) => {
     try {
-        // Optimisation : On ne récupère que les champs stricts nécessaires pour l'affichage
-        const topPlayers = await User.find({ isBanned: false })
-            .select('login bestScore level')
+        // On sélectionne uniquement ce qui existe dans ton modèle User.js
+        const leaders = await User.find({ isBanned: false })
+            .select('login bestScore xp level')
             .sort({ bestScore: -1 })
             .limit(10);
 
         res.status(200).json({
             status: 'success',
-            data: {
-                leaderboard: topPlayers
-            }
+            data: leaders
         });
     } catch (error) {
-        res.status(500).json({ status: 'error', message: 'Erreur lors de la récupération du classement' });
+        // Correction des accents dans le message d'erreur
+        res.status(500).json({ 
+            status: 'error', 
+            message: 'Erreur lors de la récupération du classement' 
+        });
     }
 };
