@@ -5,7 +5,7 @@ const { jwtSecret, jwtRefreshSecret, jwtExpiresIn, jwtRefreshExpiresIn, adminMai
 
 const generateTokens = (userId) => {
     if (!jwtSecret || !jwtRefreshSecret) {
-        throw new Error('Erreur de configuration serveur : Cles JWT manquantes');
+        throw new Error('Erreur de configuration serveur : Clés JWT manquantes');
     }
 
     const accessToken = jwt.sign({ id: userId }, jwtSecret, {
@@ -22,7 +22,7 @@ const generateTokens = (userId) => {
 exports.registerUser = async (login, email, password) => {
     const existingUser = await User.findOne({ $or: [{ email }, { login }] });
     if (existingUser) {
-        throw new Error('Un utilisateur avec cet email ou ce pseudo existe deja');
+        throw new Error('Un utilisateur avec cet email ou ce pseudo existe déjà');
     }
 
     let assignedRole = 'user';
@@ -83,7 +83,7 @@ exports.refreshUserToken = async (currentRefreshToken) => {
         
         const user = await User.findById(decoded.id);
         if (!user || !user.refreshTokens.includes(currentRefreshToken)) {
-            throw new Error('Jeton de rafraichissement invalide ou expire');
+            throw new Error('Jeton de rafraîchissement invalide ou expiré');
         }
 
         const { accessToken, refreshToken: newRefreshToken } = generateTokens(user._id);
@@ -94,7 +94,7 @@ exports.refreshUserToken = async (currentRefreshToken) => {
 
         return { accessToken, refreshToken: newRefreshToken };
     } catch (error) {
-        throw new Error('Session expiree, veuillez vous reconnecter');
+        throw new Error('Session expirée, veuillez vous reconnecter');
     }
 };
 

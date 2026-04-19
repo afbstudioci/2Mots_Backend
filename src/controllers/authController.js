@@ -37,7 +37,7 @@ exports.refreshToken = async (req, res) => {
         const { refreshToken: currentRefreshToken } = req.body;
         
         if (!currentRefreshToken) {
-            return res.status(401).json({ status: 'fail', message: 'Aucun jeton de rafraichissement fourni' });
+            return res.status(401).json({ status: 'fail', message: 'Aucun jeton de rafraîchissement fourni' });
         }
 
         const result = await authService.refreshUserToken(currentRefreshToken);
@@ -57,9 +57,9 @@ exports.refreshToken = async (req, res) => {
 exports.logout = async (req, res) => {
     try {
         await authService.logoutUser(req.user.id);
-        res.status(200).json({ status: 'success', message: 'Deconnexion reussie' });
+        res.status(200).json({ status: 'success', message: 'Déconnexion réussie' });
     } catch (error) {
-        res.status(500).json({ status: 'error', message: 'Erreur lors de la deconnexion' });
+        res.status(500).json({ status: 'error', message: 'Erreur lors de la déconnexion' });
     }
 };
 
@@ -78,10 +78,10 @@ exports.forgotPassword = async (req, res) => {
         const resetToken = await authService.requestPasswordReset(email);
         
         if (!resetToken) {
-            return res.status(200).json({ status: 'success', message: 'Si cet email existe, un lien a ete envoye' });
+            return res.status(200).json({ status: 'success', message: 'Si cet email existe, un lien a été envoyé' });
         }
 
-        res.status(200).json({ status: 'success', message: 'Token genere', data: { resetToken } });
+        res.status(200).json({ status: 'success', message: 'Jeton généré', data: { resetToken } });
     } catch (error) {
         res.status(500).json({ status: 'error', message: 'Erreur lors de la demande' });
     }

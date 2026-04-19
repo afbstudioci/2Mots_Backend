@@ -14,12 +14,14 @@ exports.getWords = async (req, res) => {
             return res.status(403).json({ status: 'error', message: 'Compte suspendu.' });
         }
 
+        // Tentative 1 : Récupérer des mots non joués
         let words = await WordPair.aggregate([
             { $match: { _id: { $nin: user.playedWords }, isActive: true } },
             { $sample: { size: 10 } },
             { $project: { word1: 1, word2: 1, clue: 1, expectedType: 1 } } 
         ]);
 
+        // Tentative 2 : Si la base de mots non joués est vide, on purge partiellement l'historique
         if (words.length < 10) {
             const keepCount = Math.floor(user.playedWords.length * 0.2);
             user.playedWords = user.playedWords.slice(-keepCount);
@@ -27,6 +29,15 @@ exports.getWords = async (req, res) => {
 
             words = await WordPair.aggregate([
                 { $match: { _id: { $nin: user.playedWords }, isActive: true } },
+                { $sample: { size: 10 } },
+                { $project: { word1: 1, word2: 1, clue: 1, expectedType: 1 } }
+            ]);
+        }
+
+        // Tentative 3 (Fallback ultime) : On pioche au hasard dans toute la base pour ne jamais bloquer le jeu
+        if (words.length < 10) {
+            words = await WordPair.aggregate([
+                { $match: { isActive: true } },
                 { $sample: { size: 10 } },
                 { $project: { word1: 1, word2: 1, clue: 1, expectedType: 1 } }
             ]);
@@ -60,9 +71,9 @@ exports.validateSession = async (req, res) => {
 
         if (answers.length >= 5 && totalTime < 2) {
             user.isBanned = true;
-            user.banReason = "Speedhack detecte (Temps impossible)";
+            user.banReason = "Speedhack détecté (Temps impossible)";
             await user.save();
-            return res.status(403).json({ status: 'error', message: 'Tricherie detectee. Compte banni.' });
+            return res.status(403).json({ status: 'error', message: 'Tricherie détectée. Compte banni.' });
         }
 
         for (const item of answers) {
@@ -96,7 +107,7 @@ exports.validateSession = async (req, res) => {
                     word1: pair.word1,
                     word2: pair.word2,
                     expectedAnswer: pair.exactMatch[0],
-                    userAnswer: item.answer || "Non repondu"
+                    userAnswer: item.answer || "Non répondu"
                 });
             }
 
