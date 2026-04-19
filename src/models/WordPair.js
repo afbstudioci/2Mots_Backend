@@ -1,48 +1,18 @@
+//src/models/WordPair.js
 const mongoose = require('mongoose');
 
-const answerSchema = new mongoose.Schema({
-    word: { 
-        type: String, 
-        required: true,
-        trim: true,
-        lowercase: true 
-    },
-    accuracy: { 
-        type: Number, 
-        required: true,
-        enum: [100, 80, 50] // Seulement ces trois valeurs possibles selon le CD
-    }
-}, { _id: false });
-
 const wordPairSchema = new mongoose.Schema({
-    word1: { 
-        type: String, 
-        required: true, 
-        trim: true 
-    },
-    word2: { 
-        type: String, 
-        required: true, 
-        trim: true 
-    },
-    icon1: { 
-        type: String, 
-        required: true 
-    },
-    icon2: { 
-        type: String, 
-        required: true 
-    },
-    logicalHint: { 
-        type: String, 
-        required: true 
-    },
-    answers: [answerSchema]
-}, {
-    timestamps: true
-});
+  word1: { type: String, required: true, trim: true, lowercase: true },
+  word2: { type: String, required: true, trim: true, lowercase: true },
+  clue: { type: String, required: true, trim: true },
+  expectedType: { type: String, required: true, trim: true },
+  exactMatch: [{ type: String, lowercase: true, trim: true }],
+  closeMatch: [{ type: String, lowercase: true, trim: true }],
+  partialMatch: [{ type: String, lowercase: true, trim: true }],
+  difficulty: { type: Number, default: 1, min: 1, max: 5 },
+  isActive: { type: Boolean, default: true }
+}, { timestamps: true });
 
-// Index pour optimiser la recherche aléatoire de mots
-wordPairSchema.index({ word1: 1, word2: 1 });
+wordPairSchema.index({ isActive: 1, _id: 1 });
 
 module.exports = mongoose.model('WordPair', wordPairSchema);

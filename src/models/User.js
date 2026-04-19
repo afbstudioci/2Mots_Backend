@@ -3,54 +3,69 @@ const mongoose = require('mongoose');
 const bcrypt = require('bcryptjs');
 
 const userSchema = new mongoose.Schema({
-    login: { 
-        type: String, 
-        required: [true, 'Le pseudo est obligatoire'], 
-        unique: true,
-        trim: true,
-        minlength: [3, 'Le pseudo doit contenir au moins 3 caracteres']
-    },
-    email: { 
-        type: String, 
-        required: [true, 'L\'email est obligatoire'], 
-        unique: true,
-        lowercase: true,
-        trim: true
-    },
-    password: { 
-        type: String, 
-        required: [true, 'Le mot de passe est obligatoire'],
-        minlength: [8, 'Le mot de passe doit contenir au moins 8 caracteres'],
-        select: false 
-    },
-    role: {
-        type: String,
-        enum: ['user', 'admin', 'superadmin'],
-        default: 'user'
-    },
-    bestScore: {
-        type: Number,
-        default: 0
-    },
-    resetPasswordToken: String,
-    resetPasswordExpires: Date,
-    refreshTokens: [{ type: String }]
-}, { timestamps: true });
-
-// Middleware pour hasher le mot de passe avant la sauvegarde (Refactorisé Mongoose 9+)
-userSchema.pre('save', async function() {
-    // Si le mot de passe n'est pas modifié, on sort de la fonction simplement
-    if (!this.isModified('password')) return;
-    
-    // Le hashage se fait de manière asynchrone, sans avoir besoin d'appeler next()
-    const salt = await bcrypt.genSalt(12);
-    this.password = await bcrypt.hash(this.password, salt);
+  email: {
+    type: String,
+    required: true,
+    unique: true,
+    trim: true,
+    lowercase: true,
+    index: true
+  },
+  password: {
+    type: String,
+    required: true,
+    select: false
+  },
+  username: {
+    type: String,
+    required: true,
+    trim: true
+  },
+  role: {
+    type: String,
+    enum: ['user', 'admin', 'superadmin'],
+    default: 'user'
+  },
+  bestScore: {
+    type: Number,
+    default: 0
+  },
+  kevs: {
+    type: Number,
+    default: 0
+  },
+  level: {
+    type: Number,
+    default: 1
+  },
+  playedWords: [{
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'WordPair'
+  }],
+  isBanned: {
+    type: Boolean,
+    default: false
+  },
+  banReason: {
+    type: String,
+    default: null
+  }
+}, {
+  timestamps: true
 });
 
-// Methode pour comparer les mots de passe
-userSchema.methods.comparePassword = async function(candidatePassword, userPassword) {
-    return await bcrypt.compare(candidatePassword, userPassword);
+userSchema.pre('save', async function (next) {
+  if (!this.isModified('password')) return next();
+  this.password = await bcrypt.hash(this.password, 12);
+  next();
+});
+
+userSchema.methods.comparePassword = async function (candidatePassword) {
+  return await bcrypt.compare(candidatePassword, this.password);
 };
+
+// Indexation pour purger rapidement le tableau si necessaire
+userSchema.index({ playedWords: 1 });
 
 const User = mongoose.model('User', userSchema);
 module.exports = User;
