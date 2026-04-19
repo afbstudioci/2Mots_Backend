@@ -30,7 +30,8 @@ const validateAnswer = async (wordPairId, userAnswer, timeRemaining) => {
     else if (matchedAnswer.accuracy === 50) points = 5;
 
     let isCombo = false;
-    if (timeRemaining > 7) {
+    // Sur 30 secondes, on donne le combo si on repond avec plus de 20s restantes
+    if (timeRemaining > 20) {
         isCombo = true;
         points += 5;
     }

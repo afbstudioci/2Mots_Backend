@@ -1,4 +1,3 @@
-//src/middlewares/validators.js
 const { z } = require('zod');
 
 const registerSchema = z.object({
@@ -16,14 +15,14 @@ const registerSchema = z.object({
 });
 
 const loginSchema = z.object({
-    login: z.string().trim(), // Permet de se connecter soit par pseudo soit par email
+    login: z.string().trim(),
     password: z.string()
 });
 
 const submitAnswerSchema = z.object({
     wordPairId: z.string().regex(/^[0-9a-fA-F]{24}$/, 'ID de paire de mots invalide'),
     userAnswer: z.string().trim().min(1, 'La reponse ne peut pas etre vide'),
-    timeRemaining: z.number().min(0).max(10, 'Le temps restant est invalide')
+    timeRemaining: z.number().min(0).max(30, 'Le temps restant est invalide')
 });
 
 const validate = (schema) => (req, res, next) => {
