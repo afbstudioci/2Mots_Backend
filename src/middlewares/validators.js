@@ -1,15 +1,16 @@
+//src/middlewares/validators.js
 const { z } = require('zod');
 
 const registerSchema = z.object({
     login: z.string()
-        .min(3, 'Le pseudo doit faire au moins 3 caracteres')
-        .max(20, 'Le pseudo ne doit pas depasser 20 caracteres')
+        .min(3, 'Le pseudo doit faire au moins 3 caractères')
+        .max(20, 'Le pseudo ne doit pas dépasser 20 caractères')
         .trim(),
     email: z.string()
         .email('Veuillez fournir un email valide')
         .trim(),
     password: z.string()
-        .min(8, 'Le mot de passe doit faire au moins 8 caracteres')
+        .min(8, 'Le mot de passe doit faire au moins 8 caractères')
         .regex(/[A-Z]/, 'Le mot de passe doit contenir au moins une majuscule')
         .regex(/[0-9]/, 'Le mot de passe doit contenir au moins un chiffre')
 });
@@ -17,12 +18,6 @@ const registerSchema = z.object({
 const loginSchema = z.object({
     login: z.string().trim(),
     password: z.string()
-});
-
-const submitAnswerSchema = z.object({
-    wordPairId: z.string().regex(/^[0-9a-fA-F]{24}$/, 'ID de paire de mots invalide'),
-    userAnswer: z.string().trim().min(1, 'La reponse ne peut pas etre vide'),
-    timeRemaining: z.number().min(0).max(30, 'Le temps restant est invalide')
 });
 
 const validate = (schema) => (req, res, next) => {
@@ -37,6 +32,5 @@ const validate = (schema) => (req, res, next) => {
 
 module.exports = {
     validateRegister: validate(registerSchema),
-    validateLogin: validate(loginSchema),
-    validateSubmitAnswer: validate(submitAnswerSchema)
+    validateLogin: validate(loginSchema)
 };

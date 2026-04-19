@@ -6,12 +6,12 @@ const initAiWorker = require('./workers/aiWordGenerator');
 
 connectDB().then(() => {
     app.listen(port, () => {
-        console.log(`[SERVEUR] Demarre sur le port ${port} en mode ${process.env.NODE_ENV || 'development'}`);
+        console.log(`[SERVEUR] Démarré sur le port ${port} en mode ${process.env.NODE_ENV || 'development'}`);
         
-        // Initialisation du Generateur IA Autonome une fois la DB prete
+        // Initialisation du Générateur IA Autonome une fois la DB prête
         initAiWorker();
     });
 }).catch(err => {
-    console.error('[SERVEUR] Echec critique au demarrage (Base de donnees inatteignable):', err);
+    console.error('[SERVEUR] Échec critique au démarrage (Base de données inatteignable) :', err);
     process.exit(1);
 });

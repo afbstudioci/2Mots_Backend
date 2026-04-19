@@ -5,14 +5,14 @@ const { mongoUri } = require('./env');
 const connectDB = async () => {
     try {
         const conn = await mongoose.connect(mongoUri);
-        console.log(`MongoDB Connecte: ${conn.connection.host}`);
+        console.log(`[BASE DE DONNÉES] MongoDB Connecté : ${conn.connection.host}`);
         
-        // Nettoyage automatique des anciens index (corrige le bug E11000 du champ 'username')
+        // Nettoyage automatique des anciens index
         const User = require('../models/User');
         await User.syncIndexes();
         
     } catch (error) {
-        console.error(`Erreur de connexion MongoDB: ${error.message}`);
+        console.error(`[BASE DE DONNÉES] Erreur de connexion : ${error.message}`);
         process.exit(1);
     }
 };
