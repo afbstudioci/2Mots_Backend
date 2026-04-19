@@ -106,6 +106,19 @@ exports.logoutUser = async (userId) => {
     }
 };
 
+exports.getUserProfile = async (userId) => {
+    const user = await User.findById(userId);
+    if (!user) {
+        throw new Error('Utilisateur introuvable');
+    }
+
+    const userResponse = user.toObject();
+    delete userResponse.password;
+    delete userResponse.refreshTokens;
+
+    return userResponse;
+};
+
 exports.requestPasswordReset = async (email) => {
     return null;
 };

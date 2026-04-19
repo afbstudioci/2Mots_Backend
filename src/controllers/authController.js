@@ -14,7 +14,6 @@ const sendTokenResponse = (res, statusCode, result) => {
 
 exports.register = async (req, res) => {
     try {
-        // Correction : Utilisation de 'login' pour correspondre au validateur et au modele
         const { login, email, password } = req.body;
         const result = await authService.registerUser(login, email, password);
         sendTokenResponse(res, 201, result);
@@ -57,10 +56,19 @@ exports.refreshToken = async (req, res) => {
 
 exports.logout = async (req, res) => {
     try {
-        await authService.logoutUser(req.user);
+        await authService.logoutUser(req.user.id);
         res.status(200).json({ status: 'success', message: 'Deconnexion reussie' });
     } catch (error) {
         res.status(500).json({ status: 'error', message: 'Erreur lors de la deconnexion' });
+    }
+};
+
+exports.getMe = async (req, res) => {
+    try {
+        const user = await authService.getUserProfile(req.user.id);
+        res.status(200).json({ status: 'success', data: { user } });
+    } catch (error) {
+        res.status(404).json({ status: 'fail', message: error.message });
     }
 };
 
