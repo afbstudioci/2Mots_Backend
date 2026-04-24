@@ -23,6 +23,10 @@ const userSchema = new mongoose.Schema({
         minlength: [8, 'Le mot de passe doit contenir au moins 8 caracteres'],
         select: false 
     },
+    avatar: {
+        type: String,
+        default: null
+    },
     role: {
         type: String,
         enum: ['user', 'admin', 'superadmin'],

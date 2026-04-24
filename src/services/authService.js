@@ -5,7 +5,7 @@ const { jwtSecret, jwtRefreshSecret, jwtExpiresIn, jwtRefreshExpiresIn, adminMai
 
 const generateTokens = (userId) => {
     if (!jwtSecret || !jwtRefreshSecret) {
-        throw new Error('Erreur de configuration serveur : Clés JWT manquantes');
+        throw new Error('Erreur de configuration serveur : Cles JWT manquantes');
     }
 
     const accessToken = jwt.sign({ id: userId }, jwtSecret, {
@@ -22,7 +22,7 @@ const generateTokens = (userId) => {
 exports.registerUser = async (login, email, password) => {
     const existingUser = await User.findOne({ $or: [{ email }, { login }] });
     if (existingUser) {
-        throw new Error('Un utilisateur avec cet email ou ce pseudo existe déjà');
+        throw new Error('Un utilisateur avec cet email ou ce pseudo existe deja');
     }
 
     let assignedRole = 'user';
@@ -30,10 +30,14 @@ exports.registerUser = async (login, email, password) => {
         assignedRole = 'superadmin';
     }
 
+    // Generation d'un avatar par defaut base sur le login (UI-Avatars)
+    const defaultAvatar = `https://ui-avatars.com/api/?name=${encodeURIComponent(login)}&background=FF5A5F&color=fff&size=128`;
+
     const newUser = await User.create({
         login,
         email,
         password,
+        avatar: defaultAvatar,
         role: assignedRole
     });
 
@@ -83,7 +87,7 @@ exports.refreshUserToken = async (currentRefreshToken) => {
         
         const user = await User.findById(decoded.id);
         if (!user || !user.refreshTokens.includes(currentRefreshToken)) {
-            throw new Error('Jeton de rafraîchissement invalide ou expiré');
+            throw new Error('Jeton de rafraichissement invalide ou expire');
         }
 
         const { accessToken, refreshToken: newRefreshToken } = generateTokens(user._id);
@@ -94,7 +98,7 @@ exports.refreshUserToken = async (currentRefreshToken) => {
 
         return { accessToken, refreshToken: newRefreshToken };
     } catch (error) {
-        throw new Error('Session expirée, veuillez vous reconnecter');
+        throw new Error('Session expiree, veuillez vous reconnecter');
     }
 };
 

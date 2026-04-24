@@ -1,0 +1,32 @@
+2Mots_Backend
+├── package-lock.json
+├── package.json
+├── src
+│   ├── app.js
+│   ├── config
+│   │   ├── db.js
+│   │   └── env.js
+│   ├── controllers
+│   │   ├── authController.js
+│   │   ├── gameController.js
+│   │   └── leaderboardController.js
+│   ├── index.js
+│   ├── middlewares
+│   │   ├── adminMiddleware.js
+│   │   ├── auth.js
+│   │   └── validators.js
+│   ├── models
+│   │   ├── User.js
+│   │   └── WordPair.js
+│   ├── routes
+│   │   ├── authRoutes.js
+│   │   ├── gameRoutes.js
+│   │   └── leaderboardRoutes.js
+│   ├── services
+│   │   ├── authService.js
+│   │   ├── gameService.js
+│   │   └── leaderboardService.js
+│   └── workers
+│       └── aiWordGenerator.js
+├── structure.txt
+└── workers
