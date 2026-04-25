@@ -1,11 +1,10 @@
 const cron = require('node-cron');
 const { GoogleGenerativeAI } = require('@google/generative-ai');
 const WordPair = require('../models/WordPair');
-const { geminiApiKey } = require('../config/env');
+const { geminiApiKey, geminiModel } = require('../config/env'); // On importe geminiModel
 
 const DB_WORD_LIMIT = 50000;
 
-// LE DICTIONNAIRE INFAILLIBLE : Catégorie -> Famille:NomIcone
 const CATEGORY_ICON_MAP = {
   "Alimentation": "MaterialCommunityIcons:food-apple",
   "Nature": "Feather:leaf",
@@ -44,12 +43,12 @@ const generateAndSaveWords = async () => {
     }
 
     const genAI = new GoogleGenerativeAI(geminiApiKey);
-    const model = genAI.getGenerativeModel({ model: 'gemini-1.5-flash-latest' });
+    // PLUS AUCUN MODELE EN DUR : On utilise la variable d'environnement
+    const model = genAI.getGenerativeModel({ model: geminiModel });
 
     try {
-        console.log('[WORKER] Demarrage de la generation de nouveaux mots...');
+        console.log(`[WORKER] Demarrage de la generation de nouveaux mots avec le modele : ${geminiModel}...`);
 
-        // Le Prompt est maintenant strict sur les catégories
         const prompt = `Génère 60 paires de mots en français pour un jeu de réflexion. 
         L'utilisateur doit deviner le lien logique entre "word1" et "word2".
         Tu dois fournir la nature grammaticale dans "expectedType" (ex: "Nom commun", "Verbe", "Adjectif").
@@ -84,12 +83,10 @@ const generateAndSaveWords = async () => {
         const parsedData = JSON.parse(responseText);
 
         if (Array.isArray(parsedData) && parsedData.length > 0) {
-            // INTELLIGENCE : On remplace les catégories par les codes icônes exacts
             const finalData = parsedData.map(item => {
                 const icon1 = CATEGORY_ICON_MAP[item.category1] || CATEGORY_ICON_MAP["Default"];
                 const icon2 = CATEGORY_ICON_MAP[item.category2] || CATEGORY_ICON_MAP["Default"];
                 
-                // On retire les catégories et on insère les icônes
                 const { category1, category2, ...rest } = item;
                 return { ...rest, icon1, icon2 };
             });
@@ -131,4 +128,4 @@ const initAiWorker = () => {
     console.log('[WORKER] Generateur IA arme et securise.');
 };
 
-module.exports = initAiWorker; 
+module.exports = initAiWorker;
