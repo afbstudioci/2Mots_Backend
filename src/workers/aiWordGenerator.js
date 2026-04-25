@@ -131,4 +131,4 @@ const initAiWorker = () => {
     console.log('[WORKER] Generateur IA arme et securise.');
 };
 
-module.exports = initAiWorker;
+module.exports = initAiWorker; 
