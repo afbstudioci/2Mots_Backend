@@ -6,91 +6,76 @@ const { geminiApiKey, geminiModel } = require('../config/env');
 
 const DB_WORD_LIMIT = 50000;
 
-// Nouveau dictionnaire 100% Ionicons (Strictement vérifié et garanti sans erreurs)
-const CATEGORY_ICON_MAP = {
-  "Alimentation": "Ionicons:restaurant-outline",
-  "Nature": "Ionicons:leaf-outline",
-  "Animal": "Ionicons:paw-outline",
-  "Transport": "Ionicons:car-outline",
-  "Météo": "Ionicons:partly-sunny-outline",
-  "Corps": "Ionicons:body-outline",
-  "Vêtement": "Ionicons:shirt-outline",
-  "Outil": "Ionicons:build-outline",
-  "Émotion": "Ionicons:happy-outline",
-  "Sport": "Ionicons:football-outline",
-  "Science": "Ionicons:flask-outline",
-  "Musique": "Ionicons:musical-notes-outline",
-  "Bâtiment": "Ionicons:business-outline",
-  "Mobilier": "Ionicons:bed-outline",
-  "Couleur": "Ionicons:color-palette-outline",
-  "Temps": "Ionicons:time-outline",
-  "Lumière": "Ionicons:sunny-outline",
-  "Eau": "Ionicons:water-outline",
-  "Feu": "Ionicons:flame-outline",
-  "Terre": "Ionicons:earth-outline",
-  "Ciel": "Ionicons:cloud-outline",
-  "Objet": "Ionicons:cube-outline",
-  "Personne": "Ionicons:person-outline",
-  "Lieu": "Ionicons:location-outline",
-  "Action": "Ionicons:walk-outline",
-  "Default": "Ionicons:help-circle-outline"
-};
-
-// Dictionnaire de traduction pour réparer les anciennes erreurs de la base de données
+// Table de conversion Bank Grade via codes Unicode (Zéro emoji en dur dans le code)
 const REPAIR_MAP = {
-  "MaterialCommunityIcons:food-apple": "Ionicons:restaurant-outline",
-  "Feather:leaf": "Ionicons:leaf-outline",
-  "MaterialCommunityIcons:cat": "Ionicons:paw-outline",
-  "FontAwesome5:car": "Ionicons:car-outline",
-  "MaterialCommunityIcons:weather-partly-cloudy": "Ionicons:partly-sunny-outline",
-  "FontAwesome5:hand-paper": "Ionicons:body-outline",
-  "MaterialCommunityIcons:tshirt-crew": "Ionicons:shirt-outline",
-  "Ionicons:build": "Ionicons:build-outline",
-  "MaterialCommunityIcons:emoticon-happy": "Ionicons:happy-outline",
-  "MaterialCommunityIcons:soccer": "Ionicons:football-outline",
-  "MaterialCommunityIcons:atom": "Ionicons:flask-outline",
-  "FontAwesome5:music": "Ionicons:musical-notes-outline",
-  "Ionicons:business": "Ionicons:business-outline",
-  "MaterialCommunityIcons:sofa": "Ionicons:bed-outline",
-  "MaterialCommunityIcons:palette": "Ionicons:color-palette-outline",
-  "Ionicons:time": "Ionicons:time-outline",
-  "Feather:sun": "Ionicons:sunny-outline",
-  "Ionicons:water": "Ionicons:water-outline",
-  "MaterialCommunityIcons:fire": "Ionicons:flame-outline",
-  "MaterialCommunityIcons:terrain": "Ionicons:earth-outline",
-  "Feather:cloud": "Ionicons:cloud-outline",
-  "Feather:box": "Ionicons:cube-outline",
-  "Ionicons:person": "Ionicons:person-outline",
-  "Ionicons:location": "Ionicons:location-outline",
-  "MaterialCommunityIcons:run": "Ionicons:walk-outline"
+  "Ionicons:restaurant-outline": "\u{1F37D}",
+  "Ionicons:leaf-outline": "\u{1F343}",
+  "Ionicons:paw-outline": "\u{1F43E}",
+  "Ionicons:car-outline": "\u{1F697}",
+  "Ionicons:partly-sunny-outline": "\u{26C5}",
+  "Ionicons:body-outline": "\u{1F9CD}",
+  "Ionicons:shirt-outline": "\u{1F455}",
+  "Ionicons:build-outline": "\u{1F528}",
+  "Ionicons:happy-outline": "\u{1F60A}",
+  "Ionicons:football-outline": "\u{26BD}",
+  "Ionicons:flask-outline": "\u{2697}",
+  "Ionicons:musical-notes-outline": "\u{1F3B6}",
+  "Ionicons:business-outline": "\u{1F3E2}",
+  "Ionicons:bed-outline": "\u{1F6CF}",
+  "Ionicons:color-palette-outline": "\u{1F3A8}",
+  "Ionicons:time-outline": "\u{23F2}",
+  "Ionicons:sunny-outline": "\u{2600}",
+  "Ionicons:water-outline": "\u{1F4A7}",
+  "Ionicons:flame-outline": "\u{1F525}",
+  "Ionicons:earth-outline": "\u{1F30D}",
+  "Ionicons:cloud-outline": "\u{2601}",
+  "Ionicons:cube-outline": "\u{1F4E6}",
+  "Ionicons:person-outline": "\u{1F464}",
+  "Ionicons:location-outline": "\u{1F4CD}",
+  "Ionicons:walk-outline": "\u{1F6B6}",
+  "Ionicons:help-circle-outline": "\u{2753}",
+  "MaterialCommunityIcons:food-apple": "\u{1F34E}",
+  "Feather:leaf": "\u{1F343}",
+  "MaterialCommunityIcons:cat": "\u{1F408}",
+  "FontAwesome5:car": "\u{1F697}",
+  "MaterialCommunityIcons:weather-partly-cloudy": "\u{26C5}",
+  "FontAwesome5:hand-paper": "\u{270B}",
+  "MaterialCommunityIcons:tshirt-crew": "\u{1F455}",
+  "Ionicons:build": "\u{1F528}",
+  "MaterialCommunityIcons:emoticon-happy": "\u{1F60A}",
+  "MaterialCommunityIcons:soccer": "\u{26BD}",
+  "MaterialCommunityIcons:atom": "\u{269B}",
+  "FontAwesome5:music": "\u{1F3B6}",
+  "Ionicons:business": "\u{1F3E2}",
+  "MaterialCommunityIcons:sofa": "\u{1F6CB}",
+  "MaterialCommunityIcons:palette": "\u{1F3A8}",
+  "Ionicons:time": "\u{23F2}",
+  "Feather:sun": "\u{2600}",
+  "Ionicons:water": "\u{1F4A7}",
+  "MaterialCommunityIcons:fire": "\u{1F525}",
+  "MaterialCommunityIcons:terrain": "\u{1F3D4}",
+  "Feather:cloud": "\u{2601}",
+  "Feather:box": "\u{1F4E6}",
+  "Ionicons:person": "\u{1F464}",
+  "Ionicons:location": "\u{1F4CD}",
+  "MaterialCommunityIcons:run": "\u{1F3C3}"
 };
 
-const VALID_CATEGORIES = Object.keys(CATEGORY_ICON_MAP).filter(k => k !== "Default").join(', ');
-
-// Fonction d'auto-guérison de la base de données
 const repairDatabaseIcons = async () => {
     try {
-        console.log("[WORKER] Début de l'analyse et réparation des icônes corrompues...");
+        console.log("[WORKER] Migration massive vers le format Emoji Premium en cours...");
         const pairs = await WordPair.find({});
         let repairedCount = 0;
 
         for (let pair of pairs) {
             let needsSave = false;
 
-            // Remplacement via la table de conversion ou assignation par défaut
-            if (pair.icon1 && REPAIR_MAP[pair.icon1]) {
-                pair.icon1 = REPAIR_MAP[pair.icon1];
-                needsSave = true;
-            } else if (pair.icon1 && !pair.icon1.startsWith('Ionicons:')) {
-                pair.icon1 = "Ionicons:help-circle-outline";
+            if (pair.icon1 && (pair.icon1.includes(':') || pair.icon1.includes('/'))) {
+                pair.icon1 = REPAIR_MAP[pair.icon1] || "\u{2753}";
                 needsSave = true;
             }
-
-            if (pair.icon2 && REPAIR_MAP[pair.icon2]) {
-                pair.icon2 = REPAIR_MAP[pair.icon2];
-                needsSave = true;
-            } else if (pair.icon2 && !pair.icon2.startsWith('Ionicons:')) {
-                pair.icon2 = "Ionicons:help-circle-outline";
+            if (pair.icon2 && (pair.icon2.includes(':') || pair.icon2.includes('/'))) {
+                pair.icon2 = REPAIR_MAP[pair.icon2] || "\u{2753}";
                 needsSave = true;
             }
 
@@ -101,12 +86,10 @@ const repairDatabaseIcons = async () => {
         }
 
         if (repairedCount > 0) {
-            console.log(`[WORKER] Succès de la réparation : ${repairedCount} énigmes ont été nettoyées.`);
-        } else {
-            console.log("[WORKER] Base de données saine. Aucune icône corrompue détectée.");
+            console.log(`[WORKER] Migration terminée : ${repairedCount} énigmes ont été converties en Emojis.`);
         }
     } catch (error) {
-        console.error('[WORKER] Erreur critique lors de la réparation de la base :', error.message);
+        console.error('[WORKER] Erreur lors de la migration des icônes :', error.message);
     }
 };
 
@@ -120,26 +103,28 @@ const generateAndSaveWords = async () => {
     const model = genAI.getGenerativeModel({ model: geminiModel });
 
     try {
-        console.log(`[WORKER] Démarrage de la génération de nouveaux mots avec le modèle : ${geminiModel}...`);
+        console.log(`[WORKER] Lancement de la génération IA (Mode Emoji Premium)...`);
 
         const prompt = `Génère 60 paires de mots en français pour un jeu de réflexion. 
         L'utilisateur doit deviner le lien logique entre "word1" et "word2".
-        Tu dois fournir la nature grammaticale dans "expectedType" (ex: "Nom commun", "Verbe", "Adjectif").
-        Tu dois classer chaque mot dans la catégorie la plus pertinente parmi cette liste EXACTE : [${VALID_CATEGORIES}]. Mets la catégorie dans "category1" et "category2".
+        Tu dois fournir la nature grammaticale dans "expectedType" (ex: "Nom commun", "Verbe").
+        
+        INSTRUCTION CAPITALE POUR LE DESIGN : 
+        Tu dois obligatoirement fournir un seul emoji (caractère Unicode natif) très représentatif pour "word1" dans le champ "icon1" et pour "word2" dans le champ "icon2".
+
         Tu dois fournir les réponses acceptées dans 3 catégories :
         - exactMatch : La réponse parfaite.
         - closeMatch : Synonymes très proches (80% de précision).
         - partialMatch : Concept lié (50% de précision).
         
-        INTERDICTION ABSOLUE D'UTILISER DES EMOJIS.
         Renvoie UNIQUEMENT un tableau JSON valide. Pas de texte autour. 
         Format attendu :
         [
           {
             "word1": "Océan",
-            "category1": "Eau",
+            "icon1": "\u{1F30A}",
             "word2": "Ciel",
-            "category2": "Météo",
+            "icon2": "\u{2601}",
             "clue": "Couleur dominante",
             "expectedType": "Adjectif",
             "exactMatch": ["bleu"],
@@ -157,16 +142,8 @@ const generateAndSaveWords = async () => {
         const parsedData = JSON.parse(responseText);
 
         if (Array.isArray(parsedData) && parsedData.length > 0) {
-            const finalData = parsedData.map(item => {
-                const icon1 = CATEGORY_ICON_MAP[item.category1] || CATEGORY_ICON_MAP["Default"];
-                const icon2 = CATEGORY_ICON_MAP[item.category2] || CATEGORY_ICON_MAP["Default"];
-                
-                const { category1, category2, ...rest } = item;
-                return { ...rest, icon1, icon2 };
-            });
-
-            await WordPair.insertMany(finalData, { ordered: false });
-            console.log(`[WORKER] Succès : ${finalData.length} nouveaux mots injectés dans MongoDB.`);
+            await WordPair.insertMany(parsedData, { ordered: false });
+            console.log(`[WORKER] Succès : ${parsedData.length} nouveaux mots injectés dans MongoDB.`);
         }
     } catch (error) {
         console.error('[WORKER] Erreur lors de la génération IA :', error.message);
@@ -177,34 +154,31 @@ const initializeWordDatabase = async () => {
     try {
         const count = await WordPair.countDocuments();
         if (count < DB_WORD_LIMIT) {
-            console.log(`[WORKER] Base de données en croissance (${count}/${DB_WORD_LIMIT}). Lancement de l'amorce...`);
+            console.log(`[WORKER] Croissance de la base (${count}/${DB_WORD_LIMIT})...`);
             await generateAndSaveWords();
         } else {
-            console.log(`[WORKER] Base de données suffisante (${count}/${DB_WORD_LIMIT}). Génération annulée.`);
+            console.log(`[WORKER] Base suffisante (${count}/${DB_WORD_LIMIT}).`);
         }
     } catch (error) {
-        console.error('[WORKER] Erreur lors de la vérification de la base :', error.message);
+        console.error('[WORKER] Erreur de vérification :', error.message);
     }
 };
 
 const initAiWorker = async () => {
     if (!geminiApiKey) {
-        console.warn("[WORKER] Clé API Gemini absente. Générateur IA inactif.");
+        console.warn("[WORKER] Clé API Gemini absente.");
         return;
     }
 
-    // 1. On nettoie les erreurs passées avant toute chose
+    // Lancement systématique du script de migration/guérison au démarrage
     await repairDatabaseIcons();
-
-    // 2. On lance la vérification pour générer si besoin
     initializeWordDatabase();
 
-    // 3. On programme la tâche cron toutes les heures
     cron.schedule('0 * * * *', async () => {
         await initializeWordDatabase();
     });
 
-    console.log('[WORKER] Générateur IA armé et sécurisé.');
+    console.log('[WORKER] Générateur IA (Emoji Premium) armé.');
 };
 
 module.exports = initAiWorker;
