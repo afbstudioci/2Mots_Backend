@@ -1,9 +1,9 @@
 const WordPair = require('../models/WordPair');
 const User = require('../models/User');
 
-const fetchGameBatch = async () => {
-    const batch = await WordPair.aggregate([{ $sample: { size: 50 } }]);
-    return batch;
+const normalizeText = (text) => {
+    if (!text) return "";
+    return text.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().trim();
 };
 
 const validateAnswer = async (wordPairId, userAnswer, timeRemaining) => {
@@ -12,34 +12,47 @@ const validateAnswer = async (wordPairId, userAnswer, timeRemaining) => {
         throw new Error('Enigme introuvable');
     }
 
-    const normalizedAnswer = userAnswer.toLowerCase().trim();
-    const matchedAnswer = wordPair.answers.find(a => a.word.toLowerCase() === normalizedAnswer);
+    const normalizedAnswer = normalizeText(userAnswer);
 
-    if (!matchedAnswer) {
+    let isCorrect = false;
+    let points = 0;
+    let accuracy = 0;
+
+    // Verification dans l'ordre : exact -> close -> partial
+    if (wordPair.exactMatch.map(normalizeText).includes(normalizedAnswer)) {
+        isCorrect = true;
+        points = 10;
+        accuracy = 100;
+    } else if (wordPair.closeMatch.map(normalizeText).includes(normalizedAnswer)) {
+        isCorrect = true;
+        points = 8;
+        accuracy = 80;
+    } else if (wordPair.partialMatch.map(normalizeText).includes(normalizedAnswer)) {
+        isCorrect = true;
+        points = 5;
+        accuracy = 50;
+    }
+
+    if (!isCorrect) {
         return {
             isCorrect: false,
             points: 0,
             accuracy: 0,
-            logicalHint: wordPair.logicalHint
+            logicalHint: wordPair.logicalHint || wordPair.clue
         };
     }
 
-    let points = 0;
-    if (matchedAnswer.accuracy === 100) points = 10;
-    else if (matchedAnswer.accuracy === 80) points = 8;
-    else if (matchedAnswer.accuracy === 50) points = 5;
-
+    // Bonus de temps (si plus de 20 secondes restantes sur 30)
     let isCombo = false;
-    // Sur 30 secondes, on donne le combo si on repond avec plus de 20s restantes
     if (timeRemaining > 20) {
         isCombo = true;
         points += 5;
     }
 
     return {
-        isCorrect: true,
+        isCorrect,
         points,
-        accuracy: matchedAnswer.accuracy,
+        accuracy,
         isCombo
     };
 };
@@ -58,7 +71,6 @@ const updateBestScore = async (userId, newScore) => {
 };
 
 module.exports = {
-    fetchGameBatch,
     validateAnswer,
     updateBestScore
 };
