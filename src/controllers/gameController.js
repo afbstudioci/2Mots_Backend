@@ -1,4 +1,3 @@
-//src/controllers/gameController.js
 const WordPair = require('../models/WordPair');
 const User = require('../models/User');
 
@@ -17,9 +16,11 @@ exports.getBatch = async (req, res) => {
         let words = await WordPair.aggregate([
             { $match: { _id: { $nin: user.playedWords }, isActive: true } },
             { $sample: { size: 10 } },
+            // On s'assure de renvoyer le clue (indice) et expectedType pour le frontend
             { $project: { word1: 1, word2: 1, clue: 1, expectedType: 1 } } 
         ]);
 
+        // Fallback si le joueur a tout joué
         if (words.length < 10) {
             const keepCount = Math.floor(user.playedWords.length * 0.2);
             user.playedWords = user.playedWords.slice(-keepCount);
@@ -32,6 +33,7 @@ exports.getBatch = async (req, res) => {
             ]);
         }
 
+        // Fallback ultime si la base est encore trop vide
         if (words.length < 10) {
             words = await WordPair.aggregate([
                 { $match: { isActive: true } },
@@ -40,8 +42,6 @@ exports.getBatch = async (req, res) => {
             ]);
         }
 
-        // CORRECTION MINEURE : On renvoie "words" directement dans data (data: words) 
-        // pour que le Frontend actuel (response.data.data) trouve directement le tableau.
         res.status(200).json({ status: 'success', data: words });
     } catch (error) {
         res.status(500).json({ status: 'error', message: error.message });
@@ -60,15 +60,15 @@ exports.validateSession = async (req, res) => {
         let totalTime = 0;
         let totalScore = 0;
         let earnedKevs = 0;
-        let earnedXP = 0;
         const corrections = [];
         const newPlayedWords = [];
+        let correctAnswersCount = 0; // Pour le système de Vague (XP)
 
         for (const item of answers) {
             totalTime += item.timeSpent || 0;
         }
 
-        // Ton excellent système anti-triche conservé !
+        // Anti-triche
         if (answers.length >= 5 && totalTime < 2) {
             user.isBanned = true;
             user.banReason = "Speedhack détecté (Temps impossible)";
@@ -87,6 +87,7 @@ exports.validateSession = async (req, res) => {
 
             const checkArray = (arr) => arr.map(normalizeText).includes(userAnswer);
 
+            // Calcul des points (pour le score de la session, pas pour les Kevs)
             if (checkArray(pair.exactMatch)) {
                 points = 10;
                 isCorrect = true;
@@ -98,11 +99,14 @@ exports.validateSession = async (req, res) => {
                 isCorrect = true;
             }
 
+            // Bonus de temps
             if (isCorrect && item.timeSpent <= 5) {
                 points = Math.floor(points * 1.5); 
             }
 
-            if (!isCorrect) {
+            if (isCorrect) {
+                correctAnswersCount += 1;
+            } else {
                 corrections.push({
                     word1: pair.word1,
                     word2: pair.word2,
@@ -112,23 +116,29 @@ exports.validateSession = async (req, res) => {
             }
 
             totalScore += points;
-            earnedKevs += points; 
-            earnedXP += points * 2; 
         }
 
-        user.playedWords.push(...newPlayedWords);
-        user.kevs += earnedKevs;
-        if (!user.xp) user.xp = 0;
-        user.xp += earnedXP;
-
+        // --- NOUVELLE ECONOMIE & SYSTEME DE VAGUE ---
+        
+        // 1 Kev par bonne réponse, strict
+        earnedKevs += correctAnswersCount; 
+        
+        // L'XP représente les énigmes réussies dans le niveau actuel
+        user.xp += correctAnswersCount;
+        
+        // Formule du système de Vague : 3 + (niveau * 2)
+        const enigmasNeededForLevel = 3 + (user.level * 2);
+        
         let leveledUp = false;
-        const xpNeeded = user.level * 100;
-        if (user.xp >= xpNeeded) {
+        if (user.xp >= enigmasNeededForLevel) {
             user.level += 1;
-            user.xp -= xpNeeded;
+            user.xp -= enigmasNeededForLevel; // On garde le surplus d'XP
             leveledUp = true;
-            user.kevs += 50; 
+            earnedKevs += 5; // Bonus de niveau en Kevs
         }
+
+        user.kevs += earnedKevs;
+        user.playedWords.push(...newPlayedWords);
 
         if (totalScore > user.bestScore) {
             user.bestScore = totalScore;
@@ -141,9 +151,11 @@ exports.validateSession = async (req, res) => {
             data: {
                 totalScore,
                 earnedKevs,
-                earnedXP,
+                correctAnswersCount,
                 leveledUp,
                 newLevel: user.level,
+                currentXp: user.xp,
+                xpNeeded: enigmasNeededForLevel,
                 isNewBest: totalScore === user.bestScore,
                 corrections
             }
