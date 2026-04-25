@@ -1,10 +1,11 @@
+//src/models/WordPair.js
 const mongoose = require('mongoose');
 
 const wordPairSchema = new mongoose.Schema({
   word1: { type: String, required: true, trim: true, lowercase: true },
-  icon1: { type: String, default: '💡' }, // Emoji pour le mot 1
+  icon1: { type: String, default: 'Ionicons:help-circle-outline' },
   word2: { type: String, required: true, trim: true, lowercase: true },
-  icon2: { type: String, default: '💡' }, // Emoji pour le mot 2
+  icon2: { type: String, default: 'Ionicons:help-circle-outline' },
   clue: { type: String, required: true, trim: true },
   expectedType: { type: String, required: true, trim: true },
   exactMatch: [{ type: String, lowercase: true, trim: true }],

@@ -1,3 +1,4 @@
+//src/controllers/gameController.js
 const WordPair = require('../models/WordPair');
 const User = require('../models/User');
 const gameService = require('../services/gameService');
@@ -14,7 +15,6 @@ exports.getBatch = async (req, res) => {
             .filter(pw => pw.cooldownUntil && pw.cooldownUntil > now)
             .map(pw => pw.word);
 
-        // INCLUSIONS OBLIGATOIRES DES ICONES
         let words = await WordPair.aggregate([
             { $match: { _id: { $nin: excludedWordIds }, isActive: true } },
             { $sample: { size: 10 } },
@@ -31,7 +31,7 @@ exports.getBatch = async (req, res) => {
 
         res.status(200).json({ status: 'success', data: words });
     } catch (error) {
-        res.status(500).json({ status: 'error', message: error.message });
+        res.status(error.statusCode || 500).json({ status: 'error', message: error.message });
     }
 };
 
@@ -41,13 +41,13 @@ exports.checkAnswer = async (req, res) => {
         const userId = req.user.id;
 
         if (!wordPairId || answer === undefined || timeSpent === undefined) {
-            return res.status(400).json({ status: 'error', message: 'Données manquantes' });
+            return res.status(400).json({ status: 'error', message: 'Données manquantes pour valider la réponse.' });
         }
 
         const result = await gameService.checkAnswerRealtime(userId, wordPairId, answer, timeSpent);
         res.status(200).json({ status: 'success', data: result });
     } catch (error) {
-        res.status(500).json({ status: 'error', message: error.message });
+        res.status(error.statusCode || 500).json({ status: 'error', message: error.message });
     }
 };
 
@@ -58,9 +58,6 @@ exports.validateSession = async (req, res) => {
         const result = await gameService.validateFinalSession(userId, answers);
         res.status(200).json({ status: 'success', data: result });
     } catch (error) {
-        if (error.message.includes('Tricherie')) {
-            return res.status(403).json({ status: 'error', message: error.message });
-        }
-        res.status(500).json({ status: 'error', message: error.message });
+        res.status(error.statusCode || 500).json({ status: 'error', message: error.message });
     }
 };

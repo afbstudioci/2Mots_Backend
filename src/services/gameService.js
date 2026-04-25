@@ -1,3 +1,4 @@
+//src/services/gameService.js
 const WordPair = require('../models/WordPair');
 const User = require('../models/User');
 
@@ -6,7 +7,6 @@ const normalizeText = (text) => {
     return text.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().trim();
 };
 
-// Fonction utilitaire pour calculer le cooldown aléatoire (entre 7 et 45 jours)
 const calculateCooldown = () => {
     const minDays = 7;
     const maxDays = 45;
@@ -16,18 +16,24 @@ const calculateCooldown = () => {
     return cooldownDate;
 };
 
+// Fonction utilitaire pour générer des erreurs typées (Zero Trust)
+const createError = (message, statusCode) => {
+    const error = new Error(message);
+    error.statusCode = statusCode;
+    return error;
+};
+
 const checkAnswerRealtime = async (userId, wordPairId, userAnswer, timeSpent) => {
     const pair = await WordPair.findById(wordPairId);
     if (!pair) {
-        throw new Error('Enigme introuvable');
+        throw createError('Énigme introuvable', 404);
     }
 
     const user = await User.findById(userId);
     if (!user) {
-        throw new Error('Utilisateur introuvable');
+        throw createError('Utilisateur introuvable', 404);
     }
 
-    // Gestion du cooldown du mot
     const existingPlayedWord = user.playedWords.find(pw => pw.word && pw.word.toString() === pair._id.toString());
     
     if (!existingPlayedWord) {
@@ -42,7 +48,6 @@ const checkAnswerRealtime = async (userId, wordPairId, userAnswer, timeSpent) =>
     let points = 0;
     let accuracy = 0;
 
-    // SECURITE : Si l'IA a mal généré le mot et que le tableau n'existe pas, on renvoie faux au lieu de crasher
     const checkArray = (arr) => arr && Array.isArray(arr) ? arr.map(normalizeText).includes(normalizedAnswer) : false;
 
     if (checkArray(pair.exactMatch)) {
@@ -100,7 +105,6 @@ const checkAnswerRealtime = async (userId, wordPairId, userAnswer, timeSpent) =>
         newLevel,
         currentXp,
         xpNeeded: 3 + (newLevel * 2),
-        // SECURITE : pair.exactMatch[0] plantera si exactMatch est vide/inexistant
         expectedAnswer: isCorrect && pair.exactMatch && pair.exactMatch.length > 0 ? pair.exactMatch[0] : null,
         logicalHint: pair.clue
     };
@@ -108,10 +112,10 @@ const checkAnswerRealtime = async (userId, wordPairId, userAnswer, timeSpent) =>
 
 const validateFinalSession = async (userId, answers) => {
     const user = await User.findById(userId);
-    if (!user) throw new Error('Utilisateur introuvable');
+    if (!user) throw createError('Utilisateur introuvable', 404);
 
     if (!answers || !Array.isArray(answers)) {
-        throw new Error('Format invalide');
+        throw createError('Format de données invalide', 400);
     }
 
     let totalTime = 0;
@@ -126,7 +130,7 @@ const validateFinalSession = async (userId, answers) => {
         user.isBanned = true;
         user.banReason = "Speedhack détecté (Temps impossible)";
         await user.save();
-        throw new Error('Tricherie détectée. Compte banni.');
+        throw createError('Tricherie détectée. Compte banni.', 403);
     }
 
     for (const item of answers) {
@@ -138,7 +142,6 @@ const validateFinalSession = async (userId, answers) => {
         let points = 0;
         let isCorrect = false;
 
-        // SECURITE : Même protection ici
         const checkArray = (arr) => arr && Array.isArray(arr) ? arr.map(normalizeText).includes(userAnswer) : false;
 
         if (checkArray(pair.exactMatch)) { points = 10; isCorrect = true; }
@@ -151,7 +154,6 @@ const validateFinalSession = async (userId, answers) => {
             corrections.push({
                 word1: pair.word1,
                 word2: pair.word2,
-                // SECURITE : Même protection ici
                 expectedAnswer: pair.exactMatch && pair.exactMatch.length > 0 ? pair.exactMatch[0] : "Inconnu",
                 userAnswer: item.answer || "Non répondu"
             });
