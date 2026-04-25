@@ -1,7 +1,8 @@
+//src/workers/aiWordGenerator.js
 const cron = require('node-cron');
 const { GoogleGenerativeAI } = require('@google/generative-ai');
 const WordPair = require('../models/WordPair');
-const { geminiApiKey, geminiModel } = require('../config/env'); // On importe geminiModel
+const { geminiApiKey, geminiModel } = require('../config/env');
 
 const DB_WORD_LIMIT = 50000;
 
@@ -38,16 +39,15 @@ const VALID_CATEGORIES = Object.keys(CATEGORY_ICON_MAP).filter(k => k !== "Defau
 
 const generateAndSaveWords = async () => {
     if (!geminiApiKey) {
-        console.warn("[WORKER] API Key Gemini absente. Generation annulee.");
+        console.warn("[WORKER] Clé API Gemini absente. Génération annulée.");
         return;
     }
 
     const genAI = new GoogleGenerativeAI(geminiApiKey);
-    // PLUS AUCUN MODELE EN DUR : On utilise la variable d'environnement
     const model = genAI.getGenerativeModel({ model: geminiModel });
 
     try {
-        console.log(`[WORKER] Demarrage de la generation de nouveaux mots avec le modele : ${geminiModel}...`);
+        console.log(`[WORKER] Démarrage de la génération de nouveaux mots avec le modèle : ${geminiModel}...`);
 
         const prompt = `Génère 60 paires de mots en français pour un jeu de réflexion. 
         L'utilisateur doit deviner le lien logique entre "word1" et "word2".
@@ -58,6 +58,7 @@ const generateAndSaveWords = async () => {
         - closeMatch : Synonymes très proches (80% de précision).
         - partialMatch : Concept lié (50% de précision).
         
+        INTERDICTION ABSOLUE D'UTILISER DES EMOJIS.
         Renvoie UNIQUEMENT un tableau JSON valide. Pas de texte autour. 
         Format attendu :
         [
@@ -92,10 +93,10 @@ const generateAndSaveWords = async () => {
             });
 
             await WordPair.insertMany(finalData, { ordered: false });
-            console.log(`[WORKER] Succes : ${finalData.length} nouveaux mots injectes dans MongoDB.`);
+            console.log(`[WORKER] Succès : ${finalData.length} nouveaux mots injectés dans MongoDB.`);
         }
     } catch (error) {
-        console.error('[WORKER] Erreur lors de la generation IA :', error.message);
+        console.error('[WORKER] Erreur lors de la génération IA :', error.message);
     }
 };
 
@@ -103,19 +104,19 @@ const initializeWordDatabase = async () => {
     try {
         const count = await WordPair.countDocuments();
         if (count < DB_WORD_LIMIT) {
-            console.log(`[WORKER] Base de donnees en croissance (${count}/${DB_WORD_LIMIT}). Lancement de l'amorce...`);
+            console.log(`[WORKER] Base de données en croissance (${count}/${DB_WORD_LIMIT}). Lancement de l'amorce...`);
             await generateAndSaveWords();
         } else {
-            console.log(`[WORKER] Base de donnees suffisante (${count}/${DB_WORD_LIMIT}). Generation annulee.`);
+            console.log(`[WORKER] Base de données suffisante (${count}/${DB_WORD_LIMIT}). Génération annulée.`);
         }
     } catch (error) {
-        console.error('[WORKER] Erreur lors de la verification de la base :', error.message);
+        console.error('[WORKER] Erreur lors de la vérification de la base :', error.message);
     }
 };
 
 const initAiWorker = () => {
     if (!geminiApiKey) {
-        console.warn("[WORKER] API Key Gemini absente. Generateur IA inactif.");
+        console.warn("[WORKER] Clé API Gemini absente. Générateur IA inactif.");
         return;
     }
 
@@ -125,7 +126,7 @@ const initAiWorker = () => {
         await initializeWordDatabase();
     });
 
-    console.log('[WORKER] Generateur IA arme et securise.');
+    console.log('[WORKER] Générateur IA armé et sécurisé.');
 };
 
 module.exports = initAiWorker;
