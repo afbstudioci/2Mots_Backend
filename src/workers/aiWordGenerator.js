@@ -62,7 +62,7 @@ const REPAIR_MAP = {
 
 const repairDatabaseIcons = async () => {
     try {
-        console.log("[WORKER] Migration massive vers le format Emoji Premium en cours...");
+        console.log("[WORKER] Migration/Vérification Emojis en cours...");
         const pairs = await WordPair.find({});
         let repairedCount = 0;
 
@@ -90,7 +90,7 @@ const repairDatabaseIcons = async () => {
         }
 
         if (repairedCount > 0) {
-            console.log(`[WORKER] Migration terminée : ${repairedCount} énigmes converties et sécurisées.`);
+            console.log(`[WORKER] Migration terminée : ${repairedCount} énigmes sécurisées.`);
         }
     } catch (error) {
         console.error('[WORKER] Erreur lors de la migration :', error.message);
@@ -99,7 +99,7 @@ const repairDatabaseIcons = async () => {
 
 const generateAndSaveWords = async () => {
     if (!geminiApiKey) {
-        console.warn("[WORKER] API Key Gemini absente. Génération annulée.");
+        console.warn("[WORKER] Clé API Gemini absente. Génération annulée.");
         return;
     }
 
@@ -107,34 +107,48 @@ const generateAndSaveWords = async () => {
     const model = genAI.getGenerativeModel({ model: geminiModel });
 
     try {
-        console.log(`[WORKER] Génération IA avec difficulté dynamique (Modèle : ${geminiModel})...`);
+        console.log(`[WORKER] Génération IA avec RÈGLES DE LOGIQUE STRICTES (Modèle : ${geminiModel})...`);
 
         const prompt = `Génère 60 paires de mots en français pour un jeu de réflexion. 
         L'utilisateur doit deviner le lien logique entre "word1" et "word2".
         
-        INSTRUCTIONS STRICTES :
+        RÈGLE D'OR DE LA LOGIQUE (INTERDICTION DES CATÉGORIES) :
+        Le lien entre les deux mots NE DOIT JAMAIS être une simple catégorie abstraite (comme "Météo", "Nature", "Outil").
+        Le lien doit être le RÉSULTAT CONCRET, l'OBJET CRÉÉ, l'UTILISATION, ou l'ASSOCIATION DIRECTE.
+
+        EXEMPLES DE BONNE LOGIQUE (À REPRODUIRE) :
+        - Serrure + Clé = Porte
+        - Abeille + Fleur = Miel
+        - Vache + Herbe = Lait
+        - Pluie + Soleil = Arc-en-ciel
+        - Pinceau + Peinture = Tableau
+        - Roue + Moteur = Voiture
+        - Farine + Eau = Pain
+
+        EXEMPLES DE MAUVAISE LOGIQUE (STRICTEMENT INTERDIT) :
+        - Nuage + Pluie = Météo (Interdit car trop abstrait)
+        - Chien + Chat = Animal (Interdit car c'est une catégorie)
+
+        INSTRUCTIONS TECHNIQUES :
         1. "icon1" et "icon2" : Fournis UNIQUEMENT un seul emoji (caractère Unicode natif) ultra-représentatif pour chaque mot.
-        2. "difficulty" : Évalue la difficulté logique de 1 à 10. 
-           - Niveau 1 : Évident et visuel (ex: Serrure + Clé = Porte).
-           - Niveau 5 : Réflexion moyenne.
-           - Niveau 10 : Très abstrait et complexe.
-        3. "expectedType" : Nature grammaticale (ex: "Nom commun", "Verbe").
+        2. "difficulty" : Évalue la difficulté logique de 1 à 10 (1 = Évident, 10 = Très complexe mais toujours logique).
+        3. "expectedType" : Nature grammaticale (ex: "Nom commun").
         4. Matchs : Fournis "exactMatch", "closeMatch" (80%), et "partialMatch" (50%).
         
         Renvoie UNIQUEMENT un tableau JSON valide. Pas de texte autour. 
         Format attendu :
         [
           {
-            "word1": "Serrure",
-            "icon1": "\u{1F512}",
-            "word2": "Clé",
-            "icon2": "\u{1F511}",
-            "clue": "On l'ouvre pour entrer",
+            "word1": "Abeille",
+            "icon1": "\u{1F41D}",
+            "word2": "Fleur",
+            "icon2": "\u{1F33C}",
+            "clue": "Produit sucré et doré",
             "expectedType": "Nom commun",
-            "difficulty": 1,
-            "exactMatch": ["porte"],
-            "closeMatch": ["portail"],
-            "partialMatch": ["maison"]
+            "difficulty": 2,
+            "exactMatch": ["miel"],
+            "closeMatch": ["nectar"],
+            "partialMatch": ["ruche"]
           }
         ]`;
 
@@ -148,7 +162,7 @@ const generateAndSaveWords = async () => {
 
         if (Array.isArray(parsedData) && parsedData.length > 0) {
             await WordPair.insertMany(parsedData, { ordered: false });
-            console.log(`[WORKER] Succès : ${parsedData.length} nouveaux mots injectés dans MongoDB.`);
+            console.log(`[WORKER] Succès : ${parsedData.length} mots logiques injectés dans MongoDB.`);
         }
     } catch (error) {
         console.error('[WORKER] Erreur lors de la génération IA :', error.message);
@@ -161,8 +175,6 @@ const initializeWordDatabase = async () => {
         if (count < DB_WORD_LIMIT) {
             console.log(`[WORKER] Base de données en croissance (${count}/${DB_WORD_LIMIT})...`);
             await generateAndSaveWords();
-        } else {
-            console.log(`[WORKER] Base de données suffisante.`);
         }
     } catch (error) {
         console.error('[WORKER] Erreur de vérification :', error.message);
@@ -182,7 +194,7 @@ const initAiWorker = async () => {
         await initializeWordDatabase();
     });
 
-    console.log('[WORKER] Générateur IA avec Matchmaking armé.');
+    console.log('[WORKER] Générateur IA Logique armé.');
 };
 
 module.exports = initAiWorker;
