@@ -15,23 +15,52 @@ exports.getBatch = async (req, res) => {
             .filter(pw => pw.cooldownUntil && pw.cooldownUntil > now)
             .map(pw => pw.word);
 
+        // Algorithme de Matchmaking basé sur le niveau du joueur
+        // Le joueur affronte des mots allant jusqu'à son niveau actuel (Max 10)
+        // On assure un mix en prenant des mots dont la difficulté est proche de son niveau
+        const maxDifficulty = Math.min(10, user.level);
+        const minDifficulty = Math.max(1, maxDifficulty - 2);
+
         let words = await WordPair.aggregate([
-            { $match: { _id: { $nin: excludedWordIds }, isActive: true } },
+            { 
+                $match: { 
+                    _id: { $nin: excludedWordIds }, 
+                    isActive: true,
+                    difficulty: { $gte: minDifficulty, $lte: maxDifficulty }
+                } 
+            },
             { $sample: { size: 10 } },
-            { $project: { word1: 1, icon1: 1, word2: 1, icon2: 1, clue: 1, expectedType: 1 } } 
+            { $project: { word1: 1, icon1: 1, word2: 1, icon2: 1, clue: 1, expectedType: 1, difficulty: 1 } } 
         ]);
 
+        // Fallback de sécurité : Si l'utilisateur a épuisé les mots de son niveau, 
+        // on élargit la recherche à toute la base inférieure ou égale à son niveau.
+        if (words.length < 10) {
+            words = await WordPair.aggregate([
+                { 
+                    $match: { 
+                        _id: { $nin: excludedWordIds }, 
+                        isActive: true,
+                        difficulty: { $lte: maxDifficulty }
+                    } 
+                },
+                { $sample: { size: 10 } },
+                { $project: { word1: 1, icon1: 1, word2: 1, icon2: 1, clue: 1, expectedType: 1, difficulty: 1 } }
+            ]);
+        }
+        
+        // Fallback ultime : on pioche dans toute la base si la base est vide/nouvelle
         if (words.length < 10) {
             words = await WordPair.aggregate([
                 { $match: { isActive: true } },
                 { $sample: { size: 10 } },
-                { $project: { word1: 1, icon1: 1, word2: 1, icon2: 1, clue: 1, expectedType: 1 } }
+                { $project: { word1: 1, icon1: 1, word2: 1, icon2: 1, clue: 1, expectedType: 1, difficulty: 1 } }
             ]);
         }
 
         res.status(200).json({ status: 'success', data: words });
     } catch (error) {
-        res.status(error.statusCode || 500).json({ status: 'error', message: error.message });
+        res.status(500).json({ status: 'error', message: error.message });
     }
 };
 
@@ -41,13 +70,13 @@ exports.checkAnswer = async (req, res) => {
         const userId = req.user.id;
 
         if (!wordPairId || answer === undefined || timeSpent === undefined) {
-            return res.status(400).json({ status: 'error', message: 'Données manquantes pour valider la réponse.' });
+            return res.status(400).json({ status: 'error', message: 'Données manquantes' });
         }
 
         const result = await gameService.checkAnswerRealtime(userId, wordPairId, answer, timeSpent);
         res.status(200).json({ status: 'success', data: result });
     } catch (error) {
-        res.status(error.statusCode || 500).json({ status: 'error', message: error.message });
+        res.status(500).json({ status: 'error', message: error.message });
     }
 };
 
@@ -58,6 +87,9 @@ exports.validateSession = async (req, res) => {
         const result = await gameService.validateFinalSession(userId, answers);
         res.status(200).json({ status: 'success', data: result });
     } catch (error) {
-        res.status(error.statusCode || 500).json({ status: 'error', message: error.message });
+        if (error.message.includes('Tricherie')) {
+            return res.status(403).json({ status: 'error', message: error.message });
+        }
+        res.status(500).json({ status: 'error', message: error.message });
     }
 };

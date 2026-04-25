@@ -6,7 +6,6 @@ const { geminiApiKey, geminiModel } = require('../config/env');
 
 const DB_WORD_LIMIT = 50000;
 
-// Table de conversion Bank Grade via codes Unicode (Zéro emoji en dur dans le code)
 const REPAIR_MAP = {
   "Ionicons:restaurant-outline": "\u{1F37D}",
   "Ionicons:leaf-outline": "\u{1F343}",
@@ -78,6 +77,11 @@ const repairDatabaseIcons = async () => {
                 pair.icon2 = REPAIR_MAP[pair.icon2] || "\u{2753}";
                 needsSave = true;
             }
+            
+            if (pair.difficulty === undefined || pair.difficulty > 10) {
+                pair.difficulty = 1;
+                needsSave = true;
+            }
 
             if (needsSave) {
                 await pair.save();
@@ -86,16 +90,16 @@ const repairDatabaseIcons = async () => {
         }
 
         if (repairedCount > 0) {
-            console.log(`[WORKER] Migration terminée : ${repairedCount} énigmes ont été converties en Emojis.`);
+            console.log(`[WORKER] Migration terminée : ${repairedCount} énigmes converties et sécurisées.`);
         }
     } catch (error) {
-        console.error('[WORKER] Erreur lors de la migration des icônes :', error.message);
+        console.error('[WORKER] Erreur lors de la migration :', error.message);
     }
 };
 
 const generateAndSaveWords = async () => {
     if (!geminiApiKey) {
-        console.warn("[WORKER] Clé API Gemini absente. Génération annulée.");
+        console.warn("[WORKER] API Key Gemini absente. Génération annulée.");
         return;
     }
 
@@ -103,33 +107,34 @@ const generateAndSaveWords = async () => {
     const model = genAI.getGenerativeModel({ model: geminiModel });
 
     try {
-        console.log(`[WORKER] Lancement de la génération IA (Mode Emoji Premium)...`);
+        console.log(`[WORKER] Génération IA avec difficulté dynamique (Modèle : ${geminiModel})...`);
 
         const prompt = `Génère 60 paires de mots en français pour un jeu de réflexion. 
         L'utilisateur doit deviner le lien logique entre "word1" et "word2".
-        Tu dois fournir la nature grammaticale dans "expectedType" (ex: "Nom commun", "Verbe").
         
-        INSTRUCTION CAPITALE POUR LE DESIGN : 
-        Tu dois obligatoirement fournir un seul emoji (caractère Unicode natif) très représentatif pour "word1" dans le champ "icon1" et pour "word2" dans le champ "icon2".
-
-        Tu dois fournir les réponses acceptées dans 3 catégories :
-        - exactMatch : La réponse parfaite.
-        - closeMatch : Synonymes très proches (80% de précision).
-        - partialMatch : Concept lié (50% de précision).
+        INSTRUCTIONS STRICTES :
+        1. "icon1" et "icon2" : Fournis UNIQUEMENT un seul emoji (caractère Unicode natif) ultra-représentatif pour chaque mot.
+        2. "difficulty" : Évalue la difficulté logique de 1 à 10. 
+           - Niveau 1 : Évident et visuel (ex: Serrure + Clé = Porte).
+           - Niveau 5 : Réflexion moyenne.
+           - Niveau 10 : Très abstrait et complexe.
+        3. "expectedType" : Nature grammaticale (ex: "Nom commun", "Verbe").
+        4. Matchs : Fournis "exactMatch", "closeMatch" (80%), et "partialMatch" (50%).
         
         Renvoie UNIQUEMENT un tableau JSON valide. Pas de texte autour. 
         Format attendu :
         [
           {
-            "word1": "Océan",
-            "icon1": "\u{1F30A}",
-            "word2": "Ciel",
-            "icon2": "\u{2601}",
-            "clue": "Couleur dominante",
-            "expectedType": "Adjectif",
-            "exactMatch": ["bleu"],
-            "closeMatch": ["bleuté", "azur"],
-            "partialMatch": ["cyan", "couleur"]
+            "word1": "Serrure",
+            "icon1": "\u{1F512}",
+            "word2": "Clé",
+            "icon2": "\u{1F511}",
+            "clue": "On l'ouvre pour entrer",
+            "expectedType": "Nom commun",
+            "difficulty": 1,
+            "exactMatch": ["porte"],
+            "closeMatch": ["portail"],
+            "partialMatch": ["maison"]
           }
         ]`;
 
@@ -154,10 +159,10 @@ const initializeWordDatabase = async () => {
     try {
         const count = await WordPair.countDocuments();
         if (count < DB_WORD_LIMIT) {
-            console.log(`[WORKER] Croissance de la base (${count}/${DB_WORD_LIMIT})...`);
+            console.log(`[WORKER] Base de données en croissance (${count}/${DB_WORD_LIMIT})...`);
             await generateAndSaveWords();
         } else {
-            console.log(`[WORKER] Base suffisante (${count}/${DB_WORD_LIMIT}).`);
+            console.log(`[WORKER] Base de données suffisante.`);
         }
     } catch (error) {
         console.error('[WORKER] Erreur de vérification :', error.message);
@@ -170,7 +175,6 @@ const initAiWorker = async () => {
         return;
     }
 
-    // Lancement systématique du script de migration/guérison au démarrage
     await repairDatabaseIcons();
     initializeWordDatabase();
 
@@ -178,7 +182,7 @@ const initAiWorker = async () => {
         await initializeWordDatabase();
     });
 
-    console.log('[WORKER] Générateur IA (Emoji Premium) armé.');
+    console.log('[WORKER] Générateur IA avec Matchmaking armé.');
 };
 
 module.exports = initAiWorker;
