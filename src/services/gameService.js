@@ -6,6 +6,16 @@ const normalizeText = (text) => {
     return text.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().trim();
 };
 
+// Fonction utilitaire pour calculer le cooldown aléatoire (entre 7 et 45 jours)
+const calculateCooldown = () => {
+    const minDays = 7;
+    const maxDays = 45;
+    const randomDays = Math.floor(Math.random() * (maxDays - minDays + 1)) + minDays;
+    const cooldownDate = new Date();
+    cooldownDate.setDate(cooldownDate.getDate() + randomDays);
+    return cooldownDate;
+};
+
 const checkAnswerRealtime = async (userId, wordPairId, userAnswer, timeSpent) => {
     const pair = await WordPair.findById(wordPairId);
     if (!pair) {
@@ -17,9 +27,15 @@ const checkAnswerRealtime = async (userId, wordPairId, userAnswer, timeSpent) =>
         throw new Error('Utilisateur introuvable');
     }
 
-    // Ajout aux mots joués si ce n'est pas déjà fait
-    if (!user.playedWords.includes(pair._id)) {
-        user.playedWords.push(pair._id);
+    // Gestion du cooldown du mot
+    const existingPlayedWord = user.playedWords.find(pw => pw.word.toString() === pair._id.toString());
+    
+    if (!existingPlayedWord) {
+        // Premier fois que le joueur voit ce mot, on l'ajoute avec un cooldown
+        user.playedWords.push({
+            word: pair._id,
+            cooldownUntil: calculateCooldown()
+        });
     }
 
     const normalizedAnswer = normalizeText(userAnswer);
@@ -29,7 +45,6 @@ const checkAnswerRealtime = async (userId, wordPairId, userAnswer, timeSpent) =>
 
     const checkArray = (arr) => arr.map(normalizeText).includes(normalizedAnswer);
 
-    // Vérification de la réponse
     if (checkArray(pair.exactMatch)) {
         isCorrect = true; points = 10; accuracy = 100;
     } else if (checkArray(pair.closeMatch)) {
@@ -45,11 +60,9 @@ const checkAnswerRealtime = async (userId, wordPairId, userAnswer, timeSpent) =>
     let newLevel = user.level;
 
     if (isCorrect) {
-        // 1 Kev par bonne réponse (Economie stricte)
         earnedKevs = 1;
         user.kevs += earnedKevs;
 
-        // Système de Vague (XP)
         user.xp += 1;
         currentXp = user.xp;
         
@@ -61,18 +74,17 @@ const checkAnswerRealtime = async (userId, wordPairId, userAnswer, timeSpent) =>
             currentXp = user.xp;
             newLevel = user.level;
             leveledUp = true;
-            earnedKevs += 5; // Bonus de niveau
+            earnedKevs += 5;
             user.kevs += 5;
         }
 
-        // Calcul du temps gagné en fonction de la rapidité
         if (timeSpent <= 5) {
-            timeWon = 12; // Réponse éclair
+            timeWon = 12;
             points = Math.floor(points * 1.5);
         } else if (timeSpent <= 15) {
-            timeWon = 8;  // Réponse rapide
+            timeWon = 8;
         } else {
-            timeWon = 4;  // Réponse lente
+            timeWon = 4;
         }
     }
 
@@ -89,7 +101,7 @@ const checkAnswerRealtime = async (userId, wordPairId, userAnswer, timeSpent) =>
         currentXp,
         xpNeeded: 3 + (newLevel * 2),
         expectedAnswer: isCorrect ? pair.exactMatch[0] : null,
-        logicalHint: pair.clue // Renvoyé si incorrect pour le bouton indice
+        logicalHint: pair.clue
     };
 };
 
@@ -109,7 +121,6 @@ const validateFinalSession = async (userId, answers) => {
         totalTime += item.timeSpent || 0;
     }
 
-    // Anti-triche
     if (answers.length >= 5 && totalTime < 2) {
         user.isBanned = true;
         user.banReason = "Speedhack détecté (Temps impossible)";

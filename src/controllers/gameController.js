@@ -9,29 +9,24 @@ exports.getBatch = async (req, res) => {
             return res.status(403).json({ status: 'error', message: 'Compte suspendu.' });
         }
 
+        // Logique de Cooldown : On exclut les mots dont le cooldown est actif (date future)
+        const now = new Date();
+        const excludedWordIds = user.playedWords
+            .filter(pw => pw.cooldownUntil && pw.cooldownUntil > now)
+            .map(pw => pw.word);
+
         let words = await WordPair.aggregate([
-            { $match: { _id: { $nin: user.playedWords }, isActive: true } },
+            { $match: { _id: { $nin: excludedWordIds }, isActive: true } },
             { $sample: { size: 10 } },
             { $project: { word1: 1, word2: 1, clue: 1, expectedType: 1 } } 
         ]);
 
-        if (words.length < 10) {
-            const keepCount = Math.floor(user.playedWords.length * 0.2);
-            user.playedWords = user.playedWords.slice(-keepCount);
-            await user.save();
-
-            words = await WordPair.aggregate([
-                { $match: { _id: { $nin: user.playedWords }, isActive: true } },
-                { $sample: { size: 10 } },
-                { $project: { word1: 1, word2: 1, clue: 1, expectedType: 1 } }
-            ]);
-        }
-
+        // Fallback de sécurité si la base est trop petite ou tout en cooldown
         if (words.length < 10) {
             words = await WordPair.aggregate([
                 { $match: { isActive: true } },
                 { $sample: { size: 10 } },
-                { $project: { word1: 1, word2: 1, clue: 1, expectedType: 1 } }
+                { $project: { word1: 1, icon1: 1, word2: 1, icon2: 1, clue: 1, expectedType: 1 } }
             ]);
         }
 
@@ -41,7 +36,6 @@ exports.getBatch = async (req, res) => {
     }
 };
 
-// Orchestrateur de la validation en temps réel
 exports.checkAnswer = async (req, res) => {
     try {
         const { wordPairId, answer, timeSpent } = req.body;
@@ -59,7 +53,6 @@ exports.checkAnswer = async (req, res) => {
     }
 };
 
-// Orchestrateur de la validation de fin de partie
 exports.validateSession = async (req, res) => {
     try {
         const { answers } = req.body;

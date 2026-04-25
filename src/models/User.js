@@ -1,4 +1,3 @@
-//src/models/User.js
 const mongoose = require('mongoose');
 const bcrypt = require('bcryptjs');
 
@@ -48,9 +47,16 @@ const userSchema = new mongoose.Schema({
         type: Number,
         default: 1
     },
+    // NOUVEAU : Tableau d'objets avec Date de cooldown
     playedWords: [{
-        type: mongoose.Schema.Types.ObjectId,
-        ref: 'WordPair'
+        word: { 
+            type: mongoose.Schema.Types.ObjectId, 
+            ref: 'WordPair'
+        },
+        cooldownUntil: {
+            type: Date,
+            default: null // Null signifie vu, mais plus en cooldown
+        }
     }],
     isBanned: {
         type: Boolean,
@@ -65,7 +71,8 @@ const userSchema = new mongoose.Schema({
     refreshTokens: [{ type: String }]
 }, { timestamps: true });
 
-userSchema.index({ playedWords: 1 });
+// Index composé pour optimiser la recherche des mots en cooldown
+userSchema.index({ 'playedWords.word': 1, 'playedWords.cooldownUntil': 1 });
 
 userSchema.pre('save', async function() {
     if (!this.isModified('password')) return;
