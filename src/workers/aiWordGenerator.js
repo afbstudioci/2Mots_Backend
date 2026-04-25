@@ -21,31 +21,29 @@ const generateAndSaveWords = async () => {
         const prompt = `Génère 60 paires de mots en français pour un jeu de réflexion. 
         L'utilisateur doit deviner le lien logique entre "word1" et "word2".
         
-        RÈGLE D'OR DE LA LOGIQUE STRICTE (INTERDICTION DES CATÉGORIES ET SYNONYMES) :
-        Le lien entre les deux mots NE DOIT JAMAIS être une catégorie abstraite, un adjectif vague ou un synonyme d'un des mots.
-        Il doit s'agir d'une CAUSALITÉ, d'un RÉSULTAT CONCRET, d'une ACTION DIRECTE ou d'une COMPOSITION PHYSIQUE incontestable.
+        RÈGLE D'OR DE LA LOGIQUE STRICTE :
+        Le lien entre les deux mots NE DOIT JAMAIS être une catégorie abstraite ou un synonyme d'un des mots.
+        Il doit s'agir d'une CAUSALITÉ, d'un RÉSULTAT CONCRET ou d'une ACTION DIRECTE incontestable.
+        La nature du mot attendu ("expectedType") peut être un Nom commun, un Verbe, ou un Adjectif, tant que la logique est pure et rigoureuse.
         La solution ("exactMatch") ne doit en aucun cas être une variation de "word1" ou "word2".
 
         EXEMPLES DE BONNE LOGIQUE CAUSALE (À REPRODUIRE) :
-        - Serrure + Clé = Porte
-        - Abeille + Fleur = Miel
-        - Vache + Herbe = Lait
-        - Pluie + Soleil = Arc-en-ciel
-        - Pinceau + Peinture = Tableau
-        - Roue + Moteur = Voiture
-        - Farine + Eau = Pain
+        - Serrure + Clé = Ouvrir (Verbe)
+        - Glace + Soleil = Fondre (Verbe) ou Eau (Nom commun)
+        - Abeille + Fleur = Butiner (Verbe) ou Miel (Nom commun)
+        - Pluie + Froid = Geler (Verbe) ou Verglas (Nom commun)
+        - Citron + Vinaigre = Acide (Adjectif)
 
         EXEMPLES DE MAUVAISE LOGIQUE (STRICTEMENT INTERDIT) :
-        - Glace + Chaleur = Froid (Interdit: "Froid" est un adjectif abstrait lié à Glace)
-        - Fenêtre + Verre = Transparence (Interdit: Concept abstrait sans résultat matériel)
+        - Glace + Chaleur = Froid (Interdit: "Froid" est juste le contraire de chaleur, ce n'est pas le résultat causal)
+        - Fenêtre + Verre = Transparence (Interdit: Concept trop abstrait)
         - Avocat + Plaider = Plaider (Interdit: La solution est l'un des mots)
-        - Nuage + Pluie = Météo (Interdit: Catégorie vague)
 
         INSTRUCTIONS TECHNIQUES ET ORTHOGRAPHIQUES :
-        1. "difficulty" : Évalue la difficulté logique de 1 à 10 (1 = Évident, 10 = Très complexe mais toujours parfaitement logique et matériel).
-        2. "expectedType" : Nature grammaticale (ex: "Nom commun", "Verbe").
+        1. "difficulty" : Évalue la difficulté logique de 1 à 10 (1 = Évident, 10 = Très complexe mais toujours parfaitement logique).
+        2. "expectedType" : Nature grammaticale (ex: "Nom commun", "Verbe", "Adjectif").
         3. Matchs : Fournis "exactMatch", "closeMatch" (80%), et "partialMatch" (50%).
-        4. TYPOGRAPHIE PARFAITE : Tu dois fournir un texte avec tous les accents français corrects (é, è, à, ç, etc.). Fais très attention à ne pas oublier d'accents dans "clue", "word1", "word2" et les tableaux de match.
+        4. TYPOGRAPHIE PARFAITE : Tu dois fournir un texte avec tous les accents français corrects (é, è, à, ç, etc.). Fais très attention à ne pas oublier d'accents.
         
         Renvoie UNIQUEMENT un tableau JSON valide. Pas de texte autour. 
         Format attendu :
@@ -53,12 +51,12 @@ const generateAndSaveWords = async () => {
           {
             "word1": "Abeille",
             "word2": "Fleur",
-            "clue": "Produit sucré et doré",
-            "expectedType": "Nom commun",
+            "clue": "Action de récolter le nectar",
+            "expectedType": "Verbe",
             "difficulty": 2,
-            "exactMatch": ["miel"],
-            "closeMatch": ["nectar"],
-            "partialMatch": ["ruche"]
+            "exactMatch": ["butiner"],
+            "closeMatch": ["recolter"],
+            "partialMatch": ["manger"]
           }
         ]`;
 
