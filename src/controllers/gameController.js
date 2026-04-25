@@ -15,12 +15,10 @@ exports.getBatch = async (req, res) => {
             .filter(pw => pw.cooldownUntil && pw.cooldownUntil > now)
             .map(pw => pw.word);
 
-        // Algorithme de Matchmaking basé sur le niveau du joueur
-        // Le joueur affronte des mots allant jusqu'à son niveau actuel (Max 10)
-        // On assure un mix en prenant des mots dont la difficulté est proche de son niveau
         const maxDifficulty = Math.min(10, user.level);
         const minDifficulty = Math.max(1, maxDifficulty - 2);
 
+        // Projet allégé : Plus d'icônes envoyées au front !
         let words = await WordPair.aggregate([
             { 
                 $match: { 
@@ -30,11 +28,9 @@ exports.getBatch = async (req, res) => {
                 } 
             },
             { $sample: { size: 10 } },
-            { $project: { word1: 1, icon1: 1, word2: 1, icon2: 1, clue: 1, expectedType: 1, difficulty: 1 } } 
+            { $project: { word1: 1, word2: 1, clue: 1, expectedType: 1, difficulty: 1 } } 
         ]);
 
-        // Fallback de sécurité : Si l'utilisateur a épuisé les mots de son niveau, 
-        // on élargit la recherche à toute la base inférieure ou égale à son niveau.
         if (words.length < 10) {
             words = await WordPair.aggregate([
                 { 
@@ -45,16 +41,15 @@ exports.getBatch = async (req, res) => {
                     } 
                 },
                 { $sample: { size: 10 } },
-                { $project: { word1: 1, icon1: 1, word2: 1, icon2: 1, clue: 1, expectedType: 1, difficulty: 1 } }
+                { $project: { word1: 1, word2: 1, clue: 1, expectedType: 1, difficulty: 1 } }
             ]);
         }
         
-        // Fallback ultime : on pioche dans toute la base si la base est vide/nouvelle
         if (words.length < 10) {
             words = await WordPair.aggregate([
                 { $match: { isActive: true } },
                 { $sample: { size: 10 } },
-                { $project: { word1: 1, icon1: 1, word2: 1, icon2: 1, clue: 1, expectedType: 1, difficulty: 1 } }
+                { $project: { word1: 1, word2: 1, clue: 1, expectedType: 1, difficulty: 1 } }
             ]);
         }
 
