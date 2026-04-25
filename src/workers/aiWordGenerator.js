@@ -16,16 +16,17 @@ const generateAndSaveWords = async () => {
     const model = genAI.getGenerativeModel({ model: geminiModel });
 
     try {
-        console.log(`[WORKER] Génération IA avec LOGIQUE PURE et MINIMALISTE (Modèle : ${geminiModel})...`);
+        console.log(`[WORKER] Génération IA avec LOGIQUE CAUSALE STRICTE (Modèle : ${geminiModel})...`);
 
         const prompt = `Génère 60 paires de mots en français pour un jeu de réflexion. 
         L'utilisateur doit deviner le lien logique entre "word1" et "word2".
         
-        RÈGLE D'OR DE LA LOGIQUE (INTERDICTION DES CATÉGORIES) :
-        Le lien entre les deux mots NE DOIT JAMAIS être une simple catégorie abstraite (comme "Météo", "Nature", "Outil").
-        Le lien doit être le RÉSULTAT CONCRET, l'OBJET CRÉÉ, l'UTILISATION, ou l'ASSOCIATION DIRECTE.
+        RÈGLE D'OR DE LA LOGIQUE STRICTE (INTERDICTION DES CATÉGORIES ET SYNONYMES) :
+        Le lien entre les deux mots NE DOIT JAMAIS être une catégorie abstraite, un adjectif vague ou un synonyme d'un des mots.
+        Il doit s'agir d'une CAUSALITÉ, d'un RÉSULTAT CONCRET, d'une ACTION DIRECTE ou d'une COMPOSITION PHYSIQUE incontestable.
+        La solution ("exactMatch") ne doit en aucun cas être une variation de "word1" ou "word2".
 
-        EXEMPLES DE BONNE LOGIQUE (À REPRODUIRE) :
+        EXEMPLES DE BONNE LOGIQUE CAUSALE (À REPRODUIRE) :
         - Serrure + Clé = Porte
         - Abeille + Fleur = Miel
         - Vache + Herbe = Lait
@@ -35,13 +36,16 @@ const generateAndSaveWords = async () => {
         - Farine + Eau = Pain
 
         EXEMPLES DE MAUVAISE LOGIQUE (STRICTEMENT INTERDIT) :
-        - Nuage + Pluie = Météo (Interdit car trop abstrait)
-        - Chien + Chat = Animal (Interdit car c'est une catégorie)
+        - Glace + Chaleur = Froid (Interdit: "Froid" est un adjectif abstrait lié à Glace)
+        - Fenêtre + Verre = Transparence (Interdit: Concept abstrait sans résultat matériel)
+        - Avocat + Plaider = Plaider (Interdit: La solution est l'un des mots)
+        - Nuage + Pluie = Météo (Interdit: Catégorie vague)
 
-        INSTRUCTIONS TECHNIQUES :
-        1. "difficulty" : Évalue la difficulté logique de 1 à 10 (1 = Évident, 10 = Très complexe mais toujours logique).
+        INSTRUCTIONS TECHNIQUES ET ORTHOGRAPHIQUES :
+        1. "difficulty" : Évalue la difficulté logique de 1 à 10 (1 = Évident, 10 = Très complexe mais toujours parfaitement logique et matériel).
         2. "expectedType" : Nature grammaticale (ex: "Nom commun", "Verbe").
         3. Matchs : Fournis "exactMatch", "closeMatch" (80%), et "partialMatch" (50%).
+        4. TYPOGRAPHIE PARFAITE : Tu dois fournir un texte avec tous les accents français corrects (é, è, à, ç, etc.). Fais très attention à ne pas oublier d'accents dans "clue", "word1", "word2" et les tableaux de match.
         
         Renvoie UNIQUEMENT un tableau JSON valide. Pas de texte autour. 
         Format attendu :
@@ -61,7 +65,7 @@ const generateAndSaveWords = async () => {
         const result = await model.generateContent(prompt);
         let responseText = result.response.text();
 
-        responseText = responseText.replace(/```json/g, '').replace(/```/g, '').trim();
+        responseText = responseText.replace(/\`\`\`json/g, '').replace(/\`\`\`/g, '').trim();
         responseText = responseText.replace(/,\s*\]/g, ']'); 
 
         const parsedData = JSON.parse(responseText);
@@ -95,14 +99,13 @@ const initAiWorker = async () => {
         return;
     }
 
-    // Plus de script lourd de réparation d'icônes, on lance directement l'initialisation
     initializeWordDatabase();
 
     cron.schedule('0 * * * *', async () => {
         await initializeWordDatabase();
     });
 
-    console.log('[WORKER] Générateur IA Logique Minimaliste armé.');
+    console.log('[WORKER] Générateur IA Logique Causale Stricte armé.');
 };
 
 module.exports = initAiWorker;
