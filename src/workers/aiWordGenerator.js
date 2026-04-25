@@ -10,7 +10,8 @@ const generateAndSaveWords = async () => {
     }
 
     const genAI = new GoogleGenerativeAI(geminiApiKey);
-    const model = genAI.getGenerativeModel({ model: 'gemini-1.5-flash' });
+    // Correction du nom du modele pour utiliser l'alias stable recommande par Google
+    const model = genAI.getGenerativeModel({ model: 'gemini-1.5-flash-latest' });
 
     try {
         console.log('[WORKER] Demarrage de la generation de nouveaux mots...');
