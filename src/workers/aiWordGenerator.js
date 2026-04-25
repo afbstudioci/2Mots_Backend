@@ -1,20 +1,21 @@
+//src/workers/aiWordGenerator.js
 const cron = require('node-cron');
 const { GoogleGenerativeAI } = require('@google/generative-ai');
 const WordPair = require('../models/WordPair');
-const { geminiApiKey } = require('../config/env');
+const { geminiApiKey, geminiModel } = require('../config/env');
 
 const generateAndSaveWords = async () => {
     if (!geminiApiKey) {
-        console.warn("[WORKER] API Key Gemini absente. Generation annulee.");
+        console.warn("[WORKER] API Key Gemini absente. Génération annulée.");
         return;
     }
 
     const genAI = new GoogleGenerativeAI(geminiApiKey);
-    // Correction du nom du modele pour utiliser l'alias stable recommande par Google
-    const model = genAI.getGenerativeModel({ model: 'gemini-1.5-flash-latest' });
+    // Utilisation du modèle défini dynamiquement via les variables d'environnement
+    const model = genAI.getGenerativeModel({ model: geminiModel });
 
     try {
-        console.log('[WORKER] Demarrage de la generation de nouveaux mots...');
+        console.log(`[WORKER] Démarrage de la génération avec le modèle : ${geminiModel}...`);
 
         const prompt = `Génère 60 paires de mots en français pour un jeu de réflexion. 
         L'utilisateur doit deviner le lien logique entre "word1" et "word2".
@@ -43,7 +44,7 @@ const generateAndSaveWords = async () => {
 
         // Nettoyage robuste du JSON renvoyé par l'IA
         responseText = responseText.replace(/```json/g, '').replace(/```/g, '').trim();
-        // Les IA rajoutent souvent une virgule avant le crochet fermant, on la retire pour eviter l'erreur de parsing
+        // Correction automatique des erreurs fréquentes de syntaxe JSON des IA
         responseText = responseText.replace(/,\s*\]/g, ']'); 
 
         const parsedData = JSON.parse(responseText);
@@ -51,10 +52,10 @@ const generateAndSaveWords = async () => {
         if (Array.isArray(parsedData) && parsedData.length > 0) {
             // ordered: false permet d'ignorer les doublons et de sauvegarder ceux qui passent
             await WordPair.insertMany(parsedData, { ordered: false });
-            console.log(`[WORKER] Succes : ${parsedData.length} nouveaux mots injectes dans MongoDB.`);
+            console.log(`[WORKER] Succès : ${parsedData.length} nouveaux mots injectés dans MongoDB.`);
         }
     } catch (error) {
-        console.error('[WORKER] Erreur lors de la generation IA :', error.message);
+        console.error(`[WORKER] Erreur lors de la génération avec ${geminiModel} :`, error.message);
     }
 };
 
@@ -62,31 +63,31 @@ const initializeWordDatabase = async () => {
     try {
         const count = await WordPair.countDocuments();
         if (count < 50) {
-            console.log(`[WORKER] Base de donnees faible (${count} mots). Lancement de l'amorce immediate...`);
+            console.log(`[WORKER] Base de données faible (${count} mots). Lancement de l'amorce immédiate...`);
             await generateAndSaveWords();
         } else {
-            console.log(`[WORKER] Base de donnees suffisante (${count} mots).`);
+            console.log(`[WORKER] Base de données suffisante (${count} mots).`);
         }
     } catch (error) {
-        console.error('[WORKER] Erreur lors de la verification de la base :', error.message);
+        console.error('[WORKER] Erreur lors de la vérification de la base :', error.message);
     }
 };
 
 const initAiWorker = () => {
     if (!geminiApiKey) {
-        console.warn("[WORKER] API Key Gemini absente. Generateur IA inactif.");
+        console.warn("[WORKER] API Key Gemini absente. Générateur IA inactif.");
         return;
     }
 
-    // 1. Amorce immediate si la base est vide au demarrage
+    // Amorce immédiate au démarrage
     initializeWordDatabase();
 
-    // 2. Planification recurrente (toutes les heures)
+    // Planification toutes les heures
     cron.schedule('0 * * * *', async () => {
         await generateAndSaveWords();
     });
 
-    console.log('[WORKER] Generateur IA arme et planifie.');
+    console.log(`[WORKER] Générateur IA armé (Modèle: ${geminiModel}) et planifié.`);
 };
 
 module.exports = initAiWorker;

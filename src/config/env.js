@@ -1,3 +1,4 @@
+//src/config/env.js
 const dotenv = require('dotenv');
 
 dotenv.config();
@@ -10,5 +11,6 @@ module.exports = {
     jwtExpiresIn: process.env.JWT_EXPIRES_IN || '15m',
     jwtRefreshExpiresIn: process.env.JWT_REFRESH_EXPIRES_IN || '7d',
     adminMail: process.env.ADMIN_MAIL,
-    geminiApiKey: process.env.GEMINI_API_KEY
+    geminiApiKey: process.env.GEMINI_API_KEY,
+    geminiModel: process.env.GEMINI_MODEL || 'gemini-1.5-flash'
 };
