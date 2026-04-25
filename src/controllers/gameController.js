@@ -9,19 +9,18 @@ exports.getBatch = async (req, res) => {
             return res.status(403).json({ status: 'error', message: 'Compte suspendu.' });
         }
 
-        // Logique de Cooldown : On exclut les mots dont le cooldown est actif (date future)
         const now = new Date();
         const excludedWordIds = user.playedWords
             .filter(pw => pw.cooldownUntil && pw.cooldownUntil > now)
             .map(pw => pw.word);
 
+        // INCLUSIONS OBLIGATOIRES DES ICONES
         let words = await WordPair.aggregate([
             { $match: { _id: { $nin: excludedWordIds }, isActive: true } },
             { $sample: { size: 10 } },
-            { $project: { word1: 1, word2: 1, clue: 1, expectedType: 1 } } 
+            { $project: { word1: 1, icon1: 1, word2: 1, icon2: 1, clue: 1, expectedType: 1 } } 
         ]);
 
-        // Fallback de sécurité si la base est trop petite ou tout en cooldown
         if (words.length < 10) {
             words = await WordPair.aggregate([
                 { $match: { isActive: true } },
@@ -46,7 +45,6 @@ exports.checkAnswer = async (req, res) => {
         }
 
         const result = await gameService.checkAnswerRealtime(userId, wordPairId, answer, timeSpent);
-
         res.status(200).json({ status: 'success', data: result });
     } catch (error) {
         res.status(500).json({ status: 'error', message: error.message });
@@ -57,9 +55,7 @@ exports.validateSession = async (req, res) => {
     try {
         const { answers } = req.body;
         const userId = req.user.id;
-
         const result = await gameService.validateFinalSession(userId, answers);
-
         res.status(200).json({ status: 'success', data: result });
     } catch (error) {
         if (error.message.includes('Tricherie')) {

@@ -28,10 +28,9 @@ const checkAnswerRealtime = async (userId, wordPairId, userAnswer, timeSpent) =>
     }
 
     // Gestion du cooldown du mot
-    const existingPlayedWord = user.playedWords.find(pw => pw.word.toString() === pair._id.toString());
+    const existingPlayedWord = user.playedWords.find(pw => pw.word && pw.word.toString() === pair._id.toString());
     
     if (!existingPlayedWord) {
-        // Premier fois que le joueur voit ce mot, on l'ajoute avec un cooldown
         user.playedWords.push({
             word: pair._id,
             cooldownUntil: calculateCooldown()
@@ -43,7 +42,8 @@ const checkAnswerRealtime = async (userId, wordPairId, userAnswer, timeSpent) =>
     let points = 0;
     let accuracy = 0;
 
-    const checkArray = (arr) => arr.map(normalizeText).includes(normalizedAnswer);
+    // SECURITE : Si l'IA a mal généré le mot et que le tableau n'existe pas, on renvoie faux au lieu de crasher
+    const checkArray = (arr) => arr && Array.isArray(arr) ? arr.map(normalizeText).includes(normalizedAnswer) : false;
 
     if (checkArray(pair.exactMatch)) {
         isCorrect = true; points = 10; accuracy = 100;
@@ -100,7 +100,8 @@ const checkAnswerRealtime = async (userId, wordPairId, userAnswer, timeSpent) =>
         newLevel,
         currentXp,
         xpNeeded: 3 + (newLevel * 2),
-        expectedAnswer: isCorrect ? pair.exactMatch[0] : null,
+        // SECURITE : pair.exactMatch[0] plantera si exactMatch est vide/inexistant
+        expectedAnswer: isCorrect && pair.exactMatch && pair.exactMatch.length > 0 ? pair.exactMatch[0] : null,
         logicalHint: pair.clue
     };
 };
@@ -137,7 +138,8 @@ const validateFinalSession = async (userId, answers) => {
         let points = 0;
         let isCorrect = false;
 
-        const checkArray = (arr) => arr.map(normalizeText).includes(userAnswer);
+        // SECURITE : Même protection ici
+        const checkArray = (arr) => arr && Array.isArray(arr) ? arr.map(normalizeText).includes(userAnswer) : false;
 
         if (checkArray(pair.exactMatch)) { points = 10; isCorrect = true; }
         else if (checkArray(pair.closeMatch)) { points = 8; isCorrect = true; }
@@ -149,7 +151,8 @@ const validateFinalSession = async (userId, answers) => {
             corrections.push({
                 word1: pair.word1,
                 word2: pair.word2,
-                expectedAnswer: pair.exactMatch[0],
+                // SECURITE : Même protection ici
+                expectedAnswer: pair.exactMatch && pair.exactMatch.length > 0 ? pair.exactMatch[0] : "Inconnu",
                 userAnswer: item.answer || "Non répondu"
             });
         }
