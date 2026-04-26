@@ -1,5 +1,6 @@
 //src/controllers/authController.js
 const authService = require('../services/authService');
+const cloudinary = require('../config/cloudinary');
 
 const sendTokenResponse = (res, statusCode, result) => {
     res.status(statusCode).json({
@@ -72,16 +73,33 @@ exports.getMe = async (req, res) => {
     }
 };
 
-// NOUVEAU CONTROLEUR : Mise à jour du profil
+// CONTROLEUR MIS A JOUR : Upload direct via le SDK officiel Cloudinary
 exports.updateProfile = async (req, res) => {
     try {
         const userId = req.user.id;
         const { login, email, currentPassword, newPassword } = req.body;
         let avatarUrl = null;
 
-        // Si une image a été uploadée, multer-storage-cloudinary place l'URL sécurisée dans req.file.path
+        // Si on reçoit une image en mémoire
         if (req.file) {
-            avatarUrl = req.file.path;
+            const uploadResult = await new Promise((resolve, reject) => {
+                // On crée un flux d'upload vers Cloudinary
+                const stream = cloudinary.uploader.upload_stream(
+                    {
+                        folder: '2mots_avatars',
+                        allowed_formats: ['jpg', 'jpeg', 'png', 'webp'],
+                        transformation: [{ width: 500, height: 500, crop: 'limit' }]
+                    },
+                    (error, result) => {
+                        if (error) reject(error);
+                        else resolve(result);
+                    }
+                );
+                // On y injecte le buffer (notre image en RAM)
+                stream.end(req.file.buffer);
+            });
+            
+            avatarUrl = uploadResult.secure_url;
         }
 
         const updatedUser = await authService.updateUserProfile(userId, {
