@@ -72,6 +72,32 @@ exports.getMe = async (req, res) => {
     }
 };
 
+// NOUVEAU CONTROLEUR : Mise à jour du profil
+exports.updateProfile = async (req, res) => {
+    try {
+        const userId = req.user.id;
+        const { login, email, currentPassword, newPassword } = req.body;
+        let avatarUrl = null;
+
+        // Si une image a été uploadée, multer-storage-cloudinary place l'URL sécurisée dans req.file.path
+        if (req.file) {
+            avatarUrl = req.file.path;
+        }
+
+        const updatedUser = await authService.updateUserProfile(userId, {
+            login,
+            email,
+            currentPassword,
+            newPassword,
+            avatarUrl
+        });
+
+        res.status(200).json({ status: 'success', message: 'Profil mis à jour', data: { user: updatedUser } });
+    } catch (error) {
+        res.status(400).json({ status: 'fail', message: error.message });
+    }
+};
+
 exports.forgotPassword = async (req, res) => {
     try {
         const { email } = req.body;

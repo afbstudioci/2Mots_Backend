@@ -1,9 +1,11 @@
+//src/routes/authRoutes.js
 const express = require('express');
 const router = express.Router();
 const rateLimit = require('express-rate-limit');
 const authController = require('../controllers/authController');
 const { validateRegister, validateLogin } = require('../middlewares/validators');
 const { protect } = require('../middlewares/auth');
+const upload = require('../middlewares/uploadMiddleware');
 
 // Limiteur strict : uniquement pour proteger l'authentification (10 tentatives)
 const authLimiter = rateLimit({
@@ -21,5 +23,8 @@ router.post('/forgot-password', authLimiter, authController.forgotPassword);
 // Routes nécessitant une authentification
 router.get('/me', protect, authController.getMe);
 router.post('/logout', protect, authController.logout);
+
+// NOUVELLE ROUTE : Mise à jour du profil (Texte + Image)
+router.put('/me', protect, upload.single('avatar'), authController.updateProfile);
 
 module.exports = router;

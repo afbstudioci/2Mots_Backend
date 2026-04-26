@@ -30,7 +30,6 @@ exports.registerUser = async (login, email, password) => {
         assignedRole = 'superadmin';
     }
 
-    // Generation d'un avatar par defaut base sur le login (UI-Avatars)
     const defaultAvatar = `https://ui-avatars.com/api/?name=${encodeURIComponent(login)}&background=FF5A5F&color=fff&size=128`;
 
     const newUser = await User.create({
@@ -125,4 +124,58 @@ exports.getUserProfile = async (userId) => {
 
 exports.requestPasswordReset = async (email) => {
     return null;
+};
+
+// NOUVEAU SERVICE : Logique metier de mise à jour du profil
+exports.updateUserProfile = async (userId, updateData) => {
+    const { login, email, currentPassword, newPassword, avatarUrl } = updateData;
+    
+    // On recupere l'utilisateur avec son mot de passe pour la verification
+    const user = await User.findById(userId).select('+password');
+    if (!user) {
+        throw new Error('Utilisateur introuvable');
+    }
+
+    // Gestion du changement de mot de passe
+    if (newPassword) {
+        if (!currentPassword) {
+            throw new Error('Le mot de passe actuel est requis pour le modifier');
+        }
+        if (!(await user.comparePassword(currentPassword, user.password))) {
+            throw new Error('Le mot de passe actuel est incorrect');
+        }
+        user.password = newPassword; // Le hook 'pre save' de Mongoose se chargera du hash
+    }
+
+    // Gestion de la modification d'email (Verification doublon)
+    if (email && email.toLowerCase() !== user.email.toLowerCase()) {
+        const existingEmail = await User.findOne({ email: email.toLowerCase() });
+        if (existingEmail) {
+            throw new Error('Cet email est déjà utilisé par un autre compte');
+        }
+        user.email = email.toLowerCase();
+    }
+
+    // Gestion de la modification du pseudo (Verification doublon)
+    if (login && login.toLowerCase() !== user.login.toLowerCase()) {
+        const existingLogin = await User.findOne({ login: { $regex: new RegExp(`^${login}$`, 'i') } });
+        if (existingLogin) {
+            throw new Error('Ce pseudo est déjà pris');
+        }
+        user.login = login;
+    }
+
+    // Mise a jour de l'avatar si une nouvelle URL Cloudinary est fournie
+    if (avatarUrl) {
+        user.avatar = avatarUrl;
+    }
+
+    await user.save(); // Declenche les validations et le hashage si necessaire
+
+    // On retourne l'objet nettoye
+    const userResponse = user.toObject();
+    delete userResponse.password;
+    delete userResponse.refreshTokens;
+
+    return userResponse;
 };
