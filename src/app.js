@@ -47,10 +47,11 @@ app.get('/api/health', (req, res) => {
     res.status(200).json({ status: 'success', message: 'Le serveur 2Mots est opérationnel et sécurisé' });
 });
 
-// Middleware global de gestion des erreurs
+// Middleware global de gestion des erreurs - OPTIMISÉ SENIOR++
 app.use((err, req, res, next) => {
     console.error(`[Erreur Système] ${err.message}`);
     
+    // Doublon de sécurité pour MongoDB
     if (err.code === 11000) {
         const field = Object.keys(err.keyValue)[0];
         const fieldName = field === 'login' ? 'pseudo' : field;
@@ -64,9 +65,18 @@ app.use((err, req, res, next) => {
         return res.status(403).json({ status: 'error', message: 'Origine non autorisée' });
     }
 
-    res.status(err.statusCode || 500).json({
-        status: 'error',
-        message: process.env.NODE_ENV === 'production' ? 'Une erreur interne est survenue' : err.message
+    // On récupère le code statut
+    const statusCode = err.statusCode || 500;
+    
+    // Si c'est une erreur client (4xx), on envoie toujours le message exact
+    // Si c'est une erreur serveur (500), on masque le détail en production
+    const isClientError = statusCode >= 400 && statusCode < 500;
+
+    res.status(statusCode).json({
+        status: isClientError ? 'fail' : 'error',
+        message: (isClientError || process.env.NODE_ENV !== 'production') 
+            ? err.message 
+            : 'Une erreur interne est survenue'
     });
 });
 
