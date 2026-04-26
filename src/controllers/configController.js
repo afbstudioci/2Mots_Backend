@@ -1,21 +1,21 @@
 //src/controllers/configController.js
 
 /**
- * Recupere la configuration publique de l'application (reseaux sociaux, contact)
- * On utilise des variables qui pourraient, plus tard, provenir de la base de donnees
+ * Recupere la configuration publique de l'application (reseaux sociaux, contact, liens)
+ * Les donnees proviennent des variables d'environnement pour une securite et modularite maximales.
  */
 exports.getAppConfig = async (req, res) => {
     try {
         const config = {
             contact: {
-                facebook: "https://facebook.com/ton-lien",
-                whatsapp: "https://wa.me/ton-numero",
-                phone: "+2250000000000",
-                email: "contact@tondomaine.com"
+                facebook: process.env.CONTACT_FACEBOOK || "https://facebook.com",
+                whatsapp: process.env.CONTACT_WHATSAPP || "https://wa.me/0000000000",
+                phone: process.env.CONTACT_PHONE || "+2250000000000",
+                email: process.env.CONTACT_EMAIL || "contact@2mots.com"
             },
             links: {
-                rules: "https://tonsite.com/regles",
-                privacy: "https://tonsite.com/confidentialite"
+                rules: process.env.LINK_RULES || "https://2mots.com/regles",
+                privacy: process.env.LINK_PRIVACY || "https://2mots.com/confidentialite"
             }
         };
 
