@@ -109,13 +109,25 @@ exports.logoutUser = async (userId) => {
     }
 };
 
+// --- CONTROLEUR MIS A JOUR : Calcul du rang ---
 exports.getUserProfile = async (userId) => {
     const user = await User.findById(userId);
     if (!user) {
         throw new Error('Utilisateur introuvable');
     }
 
+    // Calcul du rang : On compte le nombre de joueurs (non bannis) ayant un score supérieur
+    const higherScoringUsersCount = await User.countDocuments({
+        isBanned: false,
+        bestScore: { $gt: user.bestScore }
+    });
+    
+    // Le rang est le nombre de personnes devant lui + 1
+    const rank = higherScoringUsersCount + 1;
+
     const userResponse = user.toObject();
+    userResponse.rank = rank; // On injecte le rang dans la reponse
+    
     delete userResponse.password;
     delete userResponse.refreshTokens;
 
@@ -126,17 +138,14 @@ exports.requestPasswordReset = async (email) => {
     return null;
 };
 
-// NOUVEAU SERVICE : Logique metier de mise à jour du profil
 exports.updateUserProfile = async (userId, updateData) => {
     const { login, email, currentPassword, newPassword, avatarUrl } = updateData;
     
-    // On recupere l'utilisateur avec son mot de passe pour la verification
     const user = await User.findById(userId).select('+password');
     if (!user) {
         throw new Error('Utilisateur introuvable');
     }
 
-    // Gestion du changement de mot de passe
     if (newPassword) {
         if (!currentPassword) {
             throw new Error('Le mot de passe actuel est requis pour le modifier');
@@ -144,10 +153,9 @@ exports.updateUserProfile = async (userId, updateData) => {
         if (!(await user.comparePassword(currentPassword, user.password))) {
             throw new Error('Le mot de passe actuel est incorrect');
         }
-        user.password = newPassword; // Le hook 'pre save' de Mongoose se chargera du hash
+        user.password = newPassword; 
     }
 
-    // Gestion de la modification d'email (Verification doublon)
     if (email && email.toLowerCase() !== user.email.toLowerCase()) {
         const existingEmail = await User.findOne({ email: email.toLowerCase() });
         if (existingEmail) {
@@ -156,7 +164,6 @@ exports.updateUserProfile = async (userId, updateData) => {
         user.email = email.toLowerCase();
     }
 
-    // Gestion de la modification du pseudo (Verification doublon)
     if (login && login.toLowerCase() !== user.login.toLowerCase()) {
         const existingLogin = await User.findOne({ login: { $regex: new RegExp(`^${login}$`, 'i') } });
         if (existingLogin) {
@@ -165,14 +172,12 @@ exports.updateUserProfile = async (userId, updateData) => {
         user.login = login;
     }
 
-    // Mise a jour de l'avatar si une nouvelle URL Cloudinary est fournie
     if (avatarUrl) {
         user.avatar = avatarUrl;
     }
 
-    await user.save(); // Declenche les validations et le hashage si necessaire
+    await user.save();
 
-    // On retourne l'objet nettoye
     const userResponse = user.toObject();
     delete userResponse.password;
     delete userResponse.refreshTokens;
