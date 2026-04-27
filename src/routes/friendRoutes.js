@@ -2,7 +2,7 @@
 const express = require('express');
 const router = express.Router();
 const friendController = require('../controllers/friendController');
-const { protect } = require('../middleware/authMiddleware');
+const { protect } = require('../middlewares/auth');
 
 router.get('/', protect, friendController.getFriends);
 router.get('/requests', protect, friendController.getRequests);
