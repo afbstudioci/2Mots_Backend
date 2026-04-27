@@ -19,6 +19,15 @@ exports.getRequests = async (req, res) => {
     }
 };
 
+exports.getSentRequests = async (req, res) => {
+    try {
+        const sent = await friendService.getSentRequests(req.user.id);
+        res.status(200).json({ status: 'success', data: sent });
+    } catch (error) {
+        res.status(500).json({ status: 'error', message: error.message });
+    }
+};
+
 exports.sendRequest = async (req, res) => {
     try {
         await friendService.sendFriendRequest(req.user.id, req.params.id);

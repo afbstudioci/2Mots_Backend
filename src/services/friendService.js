@@ -35,6 +35,16 @@ exports.getPendingRequests = async (userId) => {
 };
 
 /**
+ * Récupère les demandes envoyées par l'utilisateur
+ */
+exports.getSentRequests = async (userId) => {
+    return await Friendship.find({
+        requester: userId,
+        status: 'pending'
+    }).populate('users', 'login avatar level');
+};
+
+/**
  * Envoie une demande d'ami
  */
 exports.sendFriendRequest = async (fromUserId, toUserId) => {
