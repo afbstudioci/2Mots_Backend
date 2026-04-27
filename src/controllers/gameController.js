@@ -15,41 +15,44 @@ exports.getBatch = async (req, res) => {
             .filter(pw => pw.cooldownUntil && pw.cooldownUntil > now)
             .map(pw => pw.word);
 
-        // Calcul de la difficulté ciblée
-        // Niveau 1-3 : Facile, 4-6 : Moyen, 7-10 : Difficile
-        const targetDifficulty = Math.min(10, user.level);
-        const minDiff = Math.max(1, targetDifficulty - 1);
-        const maxDiff = Math.min(10, targetDifficulty + 1);
+        const maxDifficulty = Math.min(10, user.level);
+        const minDifficulty = Math.max(1, maxDifficulty - 2);
 
-        // Sélection intelligente : on cherche à varier les catégories
+        // Projet allégé : Plus d'icônes envoyées au front !
         let words = await WordPair.aggregate([
             { 
                 $match: { 
                     _id: { $nin: excludedWordIds }, 
                     isActive: true,
-                    difficulty: { $gte: minDiff, $lte: maxDiff }
+                    difficulty: { $gte: minDifficulty, $lte: maxDifficulty }
                 } 
             },
-            { $sample: { size: 12 } }, // On en prend un peu plus pour filtrer
-            { $limit: 10 },
-            { $project: { word1: 1, word2: 1, clue: 1, expectedType: 1, difficulty: 1, category: 1 } } 
+            { $sample: { size: 10 } },
+            { $project: { word1: 1, word2: 1, clue: 1, expectedType: 1, difficulty: 1 } } 
         ]);
 
-        // Fallback si pas assez de mots dans la tranche
         if (words.length < 10) {
             words = await WordPair.aggregate([
                 { 
                     $match: { 
                         _id: { $nin: excludedWordIds }, 
                         isActive: true,
-                        difficulty: { $lte: maxDiff }
+                        difficulty: { $lte: maxDifficulty }
                     } 
                 },
                 { $sample: { size: 10 } },
-                { $project: { word1: 1, word2: 1, clue: 1, expectedType: 1, difficulty: 1, category: 1 } }
+                { $project: { word1: 1, word2: 1, clue: 1, expectedType: 1, difficulty: 1 } }
             ]);
         }
         
+        if (words.length < 10) {
+            words = await WordPair.aggregate([
+                { $match: { isActive: true } },
+                { $sample: { size: 10 } },
+                { $project: { word1: 1, word2: 1, clue: 1, expectedType: 1, difficulty: 1 } }
+            ]);
+        }
+
         res.status(200).json({ status: 'success', data: words });
     } catch (error) {
         res.status(500).json({ status: 'error', message: error.message });
