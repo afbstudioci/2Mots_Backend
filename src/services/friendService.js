@@ -1,6 +1,7 @@
 //src/services/friendService.js
 const User = require('../models/User');
 const Friendship = require('../models/Friendship');
+const pushService = require('./notificationService');
 
 /**
  * Récupère la liste des amis acceptés
@@ -60,11 +61,17 @@ exports.sendFriendRequest = async (fromUserId, toUserId) => {
         throw new Error("Une demande existe déjà ou vous êtes déjà amis");
     }
 
-    return await Friendship.create({
+    const friendship = await Friendship.create({
         users: [fromUserId, toUserId],
         requester: fromUserId,
         status: 'pending'
     });
+
+    // Notification push au destinataire
+    const sender = await User.findById(fromUserId).select('login');
+    pushService.onFriendRequestSent(toUserId, sender.login);
+
+    return friendship;
 };
 
 /**
@@ -86,7 +93,13 @@ exports.acceptFriendRequest = async (userId, requestId) => {
     }
 
     friendship.status = 'accepted';
-    return await friendship.save();
+    await friendship.save();
+
+    // Notification push à celui qui avait envoyé la demande
+    const accepter = await User.findById(userId).select('login');
+    pushService.onFriendRequestAccepted(friendship.requester, accepter.login);
+
+    return friendship;
 };
 
 /**

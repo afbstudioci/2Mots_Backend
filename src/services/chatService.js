@@ -1,7 +1,6 @@
 //src/services/chatService.js
 const Message = require('../models/Message');
-const User = require('../models/User');
-const admin = require('../config/firebase');
+const pushService = require('./notificationService');
 
 /**
  * Enregistre un nouveau message
@@ -38,29 +37,9 @@ exports.getChatHistory = async (userId, otherUserId, limit = 50) => {
 };
 
 /**
- * Envoie une notification push via Firebase
+ * Envoie une notification push pour un nouveau message
  */
 exports.sendPushNotification = async (recipientId, senderName, messageText, type) => {
-    try {
-        const user = await User.findById(recipientId);
-        if (!user || !user.fcmToken) return;
-
-        const payload = {
-            notification: {
-                title: senderName,
-                body: type === 'text' ? messageText : `A envoyé un ${type}`,
-                sound: 'default',
-            },
-            data: {
-                type: 'chat_message',
-                senderName: senderName,
-            },
-            token: user.fcmToken
-        };
-
-        await admin.messaging().send(payload);
-        console.log(`Notification envoyée à ${user.login}`);
-    } catch (error) {
-        console.error("Erreur Push Notification:", error);
-    }
+    await pushService.onNewMessage(recipientId, senderName, messageText, type);
 };
+
