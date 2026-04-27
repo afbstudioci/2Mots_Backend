@@ -10,6 +10,7 @@ const wordPairSchema = new mongoose.Schema({
   closeMatch: [{ type: String, lowercase: true, trim: true }],
   partialMatch: [{ type: String, lowercase: true, trim: true }],
   difficulty: { type: Number, default: 1, min: 1, max: 10 },
+  category: { type: String, default: 'general', enum: ['synonyms', 'opposites', 'contextual', 'idiomatic', 'general'] },
   isActive: { type: Boolean, default: true }
 }, { timestamps: true });
 
