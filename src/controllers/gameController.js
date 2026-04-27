@@ -53,7 +53,15 @@ exports.getBatch = async (req, res) => {
             ]);
         }
 
-        res.status(200).json({ status: 'success', data: words });
+        res.status(200).json({ 
+            status: 'success', 
+            data: words,
+            userStats: {
+                level: user.level,
+                xp: user.xp,
+                xpNeeded: 3 + (user.level * 2) // Formule synchrone avec le service
+            }
+        });
     } catch (error) {
         res.status(500).json({ status: 'error', message: error.message });
     }

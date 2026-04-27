@@ -15,62 +15,78 @@ const generateAndSaveWords = async () => {
     const genAI = new GoogleGenerativeAI(geminiApiKey);
     const model = genAI.getGenerativeModel({ model: geminiModel });
 
+    // On divise la génération en 3 paliers pour garantir la qualité
+    const tiers = [
+        { 
+            difficulty: "FACILE (1-3)", 
+            count: 20, 
+            examples: "Abeille + Fleur = Miel, Couteau + Pain = Couper, Savon + Eau = Mousse",
+            logic: "Relations directes, évidentes et ultra-concrètes."
+        },
+        { 
+            difficulty: "MOYEN (4-6)", 
+            count: 20, 
+            examples: "Pluie + Froid = Verglas, Sel + Plaie = Brûler, Encre + Papier = Écrire",
+            logic: "Relations causales nécessitant un raisonnement simple en deux étapes."
+        },
+        { 
+            difficulty: "DIFFICILE (7-10)", 
+            count: 20, 
+            examples: "Horloge + Sable = Éphémère, Miroir + Fumée = Illusion, Ancre + Vent = Résister",
+            logic: "Relations logiques rigoureuses mais non évidentes, nécessitant une réflexion profonde."
+        }
+    ];
+
     try {
-        console.log(`[WORKER] Génération IA avec LOGIQUE CAUSALE STRICTE (Modèle : ${geminiModel})...`);
+        console.log(`[WORKER] Lancement de la génération IA par paliers (Modèle : ${geminiModel})...`);
 
-        const prompt = `Génère 60 paires de mots en français pour un jeu de réflexion. 
-        L'utilisateur doit deviner le lien logique entre "word1" et "word2".
-        
-        RÈGLE D'OR DE LA LOGIQUE STRICTE :
-        Le lien entre les deux mots NE DOIT JAMAIS être une catégorie abstraite ou un synonyme d'un des mots.
-        Il doit s'agir d'une CAUSALITÉ, d'un RÉSULTAT CONCRET ou d'une ACTION DIRECTE incontestable.
-        La nature du mot attendu ("expectedType") peut être un Nom commun, un Verbe, ou un Adjectif, tant que la logique est pure et rigoureuse.
-        La solution ("exactMatch") ne doit en aucun cas être une variation de "word1" ou "word2".
+        for (const tier of tiers) {
+            const prompt = `Génère ${tier.count} paires de mots en français pour un jeu de réflexion. 
+            L'utilisateur doit deviner le lien logique entre "word1" et "word2".
+            
+            PALIER DE DIFFICULTÉ : ${tier.difficulty}
+            LOGIQUE À APPLIQUER : ${tier.logic}
+            EXEMPLES À SUIVRE : ${tier.examples}
 
-        EXEMPLES DE BONNE LOGIQUE CAUSALE (À REPRODUIRE) :
-        - Serrure + Clé = Ouvrir (Verbe)
-        - Glace + Soleil = Fondre (Verbe) ou Eau (Nom commun)
-        - Abeille + Fleur = Butiner (Verbe) ou Miel (Nom commun)
-        - Pluie + Froid = Geler (Verbe) ou Verglas (Nom commun)
-        - Citron + Vinaigre = Acide (Adjectif)
+            RÈGLES STRICTES DE QUALITÉ :
+            1. PAS de synonymes, PAS de catégories (ex: ne pas mettre "Fruit" si les mots sont "Pomme" et "Poire").
+            2. La solution ("exactMatch") doit être une CAUSALITÉ, un RÉSULTAT ou une ACTION DIRECTE.
+            3. INTERDICTION : La solution ne doit JAMAIS être l'un des mots d'origine ou une variation (ex: verbe conjugué du nom).
+            4. L'indice ("clue") doit décrire le PROCESSUS logique, pas la réponse elle-même.
+            5. TYPOGRAPHIE : Utilise parfaitement les accents français.
 
-        EXEMPLES DE MAUVAISE LOGIQUE (STRICTEMENT INTERDIT) :
-        - Glace + Chaleur = Froid (Interdit: "Froid" est juste le contraire de chaleur, ce n'est pas le résultat causal)
-        - Fenêtre + Verre = Transparence (Interdit: Concept trop abstrait)
-        - Avocat + Plaider = Plaider (Interdit: La solution est l'un des mots)
+            Format JSON attendu (UNIQUEMENT le tableau) :
+            [
+              {
+                "word1": "Mot1",
+                "word2": "Mot2",
+                "clue": "Description du lien",
+                "expectedType": "Verbe/Nom/Adjectif",
+                "difficulty": ${tier.difficulty.includes('FACILE') ? 2 : tier.difficulty.includes('MOYEN') ? 5 : 8},
+                "exactMatch": ["solution"],
+                "closeMatch": ["proche1"],
+                "partialMatch": ["lointain1"]
+              }
+            ]`;
 
-        INSTRUCTIONS TECHNIQUES ET ORTHOGRAPHIQUES :
-        1. "difficulty" : Évalue la difficulté logique de 1 à 10 (1 = Évident, 10 = Très complexe mais toujours parfaitement logique).
-        2. "expectedType" : Nature grammaticale (ex: "Nom commun", "Verbe", "Adjectif").
-        3. Matchs : Fournis "exactMatch", "closeMatch" (80%), et "partialMatch" (50%).
-        4. TYPOGRAPHIE PARFAITE : Tu dois fournir un texte avec tous les accents français corrects (é, è, à, ç, etc.). Fais très attention à ne pas oublier d'accents.
-        
-        Renvoie UNIQUEMENT un tableau JSON valide. Pas de texte autour. 
-        Format attendu :
-        [
-          {
-            "word1": "Abeille",
-            "word2": "Fleur",
-            "clue": "Action de récolter le nectar",
-            "expectedType": "Verbe",
-            "difficulty": 2,
-            "exactMatch": ["butiner"],
-            "closeMatch": ["recolter"],
-            "partialMatch": ["manger"]
-          }
-        ]`;
+            const result = await model.generateContent(prompt);
+            let responseText = result.response.text();
 
-        const result = await model.generateContent(prompt);
-        let responseText = result.response.text();
+            responseText = responseText.replace(/\`\`\`json/g, '').replace(/\`\`\`/g, '').trim();
+            const parsedData = JSON.parse(responseText);
 
-        responseText = responseText.replace(/\`\`\`json/g, '').replace(/\`\`\`/g, '').trim();
-        responseText = responseText.replace(/,\s*\]/g, ']'); 
+            if (Array.isArray(parsedData) && parsedData.length > 0) {
+                // Validation supplémentaire avant insertion
+                const validatedData = parsedData.filter(item => {
+                    const sol = item.exactMatch[0].toLowerCase();
+                    return sol !== item.word1.toLowerCase() && sol !== item.word2.toLowerCase();
+                });
 
-        const parsedData = JSON.parse(responseText);
-
-        if (Array.isArray(parsedData) && parsedData.length > 0) {
-            await WordPair.insertMany(parsedData, { ordered: false });
-            console.log(`[WORKER] Succès : ${parsedData.length} mots logiques injectés dans MongoDB.`);
+                if (validatedData.length > 0) {
+                    await WordPair.insertMany(validatedData, { ordered: false });
+                    console.log(`[WORKER] ${validatedData.length} mots ajoutés pour le palier ${tier.difficulty}.`);
+                }
+            }
         }
     } catch (error) {
         console.error('[WORKER] Erreur lors de la génération IA :', error.message);
