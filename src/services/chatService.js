@@ -62,3 +62,14 @@ exports.getGlobalUnreadCount = async (userId) => {
     return await Message.countDocuments({ recipient: userId, read: false });
 };
 
+/**
+ * Supprime tous les messages entre deux utilisateurs
+ */
+exports.clearChatHistory = async (userId, otherUserId) => {
+    return await Message.deleteMany({
+        $or: [
+            { sender: userId, recipient: otherUserId },
+            { sender: otherUserId, recipient: userId }
+        ]
+    });
+};

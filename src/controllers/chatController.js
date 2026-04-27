@@ -87,3 +87,14 @@ exports.getUnreadCount = async (req, res) => {
         res.status(500).json({ status: 'error', message: error.message });
     }
 };
+/**
+ * Efface l'historique de discussion
+ */
+exports.clearHistory = async (req, res) => {
+    try {
+        await chatService.clearChatHistory(req.user.id, req.params.friendId);
+        res.status(200).json({ status: 'success' });
+    } catch (error) {
+        res.status(500).json({ status: 'error', message: error.message });
+    }
+};
