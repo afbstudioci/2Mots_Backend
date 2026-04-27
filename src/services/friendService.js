@@ -113,3 +113,13 @@ exports.searchUsers = async (userId, query) => {
         _id: { $ne: userId }
     }).select('login avatar level').limit(10);
 };
+/**
+ * Bloque un utilisateur
+ */
+exports.blockUser = async (userId, targetId) => {
+    return await Friendship.findOneAndUpdate(
+        { users: { $all: [userId, targetId] } },
+        { status: 'blocked', requester: userId },
+        { upsert: true, new: true }
+    );
+};

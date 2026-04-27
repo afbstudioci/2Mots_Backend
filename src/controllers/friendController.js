@@ -54,3 +54,11 @@ exports.search = async (req, res) => {
         res.status(500).json({ status: 'error', message: error.message });
     }
 };
+exports.blockUser = async (req, res) => {
+    try {
+        await friendService.blockUser(req.user.id, req.params.id);
+        res.status(200).json({ status: 'success', message: "Utilisateur bloqué" });
+    } catch (error) {
+        res.status(500).json({ status: 'error', message: error.message });
+    }
+};
