@@ -68,7 +68,11 @@ const userSchema = new mongoose.Schema({
     },
     resetPasswordToken: String,
     resetPasswordExpires: Date,
-    refreshTokens: [{ type: String }]
+    refreshTokens: [{ type: String }],
+    fcmToken: {
+        type: String,
+        default: null
+    }
 }, { timestamps: true });
 
 // Index composé pour optimiser la recherche des mots en cooldown

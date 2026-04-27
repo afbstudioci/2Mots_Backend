@@ -3,11 +3,15 @@ const express = require('express');
 const cors = require('cors');
 const helmet = require('helmet');
 const rateLimit = require('express-rate-limit');
+require('./config/firebase'); // Initialisation Firebase Admin
 
 const authRoutes = require('./routes/authRoutes');
 const gameRoutes = require('./routes/gameRoutes');
 const leaderboardRoutes = require('./routes/leaderboardRoutes');
-const configRoutes = require('./routes/configRoutes'); // Ajout
+const configRoutes = require('./routes/configRoutes');
+const missionRoutes = require('./routes/missionRoutes');
+const friendRoutes = require('./routes/friendRoutes');
+const chatRoutes = require('./routes/chatRoutes');
 
 const app = express();
 
@@ -43,7 +47,10 @@ app.use('/api', globalLimiter);
 app.use('/api/auth', authRoutes);
 app.use('/api/game', gameRoutes);
 app.use('/api/leaderboard', leaderboardRoutes);
-app.use('/api/config', configRoutes); // Enregistrement de la nouvelle route
+app.use('/api/config', configRoutes);
+app.use('/api/missions', missionRoutes);
+app.use('/api/friends', friendRoutes);
+app.use('/api/chat', chatRoutes);
 
 app.get('/api/health', (req, res) => {
     res.status(200).json({ status: 'success', message: 'Le serveur 2Mots est opérationnel et sécurisé' });
