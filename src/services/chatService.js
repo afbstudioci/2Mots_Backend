@@ -15,7 +15,9 @@ exports.saveMessage = async (senderId, recipientId, data) => {
         type: type || 'text',
         fileUrl,
         fileId,
-        duration
+        duration,
+        status: 'sent',
+        read: false
     });
 
     return await message.populate('sender', 'login avatar');
@@ -41,5 +43,22 @@ exports.getChatHistory = async (userId, otherUserId, limit = 50) => {
  */
 exports.sendPushNotification = async (recipientId, senderName, messageText, type) => {
     await pushService.onNewMessage(recipientId, senderName, messageText, type);
+};
+
+/**
+ * Marque tous les messages d'une discussion comme lus
+ */
+exports.markMessagesAsRead = async (userId, friendId) => {
+    return await Message.updateMany(
+        { sender: friendId, recipient: userId, read: false },
+        { $set: { read: true, status: 'read' } }
+    );
+};
+
+/**
+ * Compte le nombre total de messages non lus pour un utilisateur
+ */
+exports.getGlobalUnreadCount = async (userId) => {
+    return await Message.countDocuments({ recipient: userId, read: false });
 };
 

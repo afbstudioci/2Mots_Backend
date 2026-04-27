@@ -29,6 +29,11 @@ const messageSchema = new mongoose.Schema({
     duration: {
         type: Number // Pour les audios/vidéos en secondes
     },
+    status: {
+        type: String,
+        enum: ['sent', 'delivered', 'read'],
+        default: 'sent'
+    },
     read: {
         type: Boolean,
         default: false

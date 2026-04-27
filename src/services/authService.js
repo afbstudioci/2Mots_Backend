@@ -54,7 +54,10 @@ exports.registerUser = async (login, email, password) => {
 
 exports.loginUser = async (loginIdentifier, password) => {
     const user = await User.findOne({
-        $or: [{ email: loginIdentifier }, { login: loginIdentifier }]
+        $or: [
+            { email: loginIdentifier.toLowerCase() }, 
+            { login: { $regex: new RegExp(`^${loginIdentifier}$`, 'i') } }
+        ]
     }).select('+password');
 
     if (!user || !(await user.comparePassword(password, user.password))) {

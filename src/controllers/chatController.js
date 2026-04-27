@@ -64,3 +64,26 @@ exports.updateFCMToken = async (req, res) => {
         res.status(500).json({ status: 'error', message: error.message });
     }
 };
+/**
+ * Marque les messages comme lus
+ */
+exports.markAsRead = async (req, res) => {
+    try {
+        await chatService.markMessagesAsRead(req.user.id, req.params.friendId);
+        res.status(200).json({ status: 'success' });
+    } catch (error) {
+        res.status(500).json({ status: 'error', message: error.message });
+    }
+};
+
+/**
+ * Récupère le nombre total de messages non lus
+ */
+exports.getUnreadCount = async (req, res) => {
+    try {
+        const count = await chatService.getGlobalUnreadCount(req.user.id);
+        res.status(200).json({ status: 'success', data: { unreadCount: count } });
+    } catch (error) {
+        res.status(500).json({ status: 'error', message: error.message });
+    }
+};
