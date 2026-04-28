@@ -8,9 +8,13 @@ const upload = multer({ storage: multer.memoryStorage() });
 
 router.get('/history/:friendId', protect, chatController.getHistory);
 router.get('/unread-count', protect, chatController.getUnreadCount);
+router.get('/conversations', protect, chatController.getConversations);
 router.post('/read/:friendId', protect, chatController.markAsRead);
 router.post('/upload', protect, upload.single('file'), chatController.uploadMedia);
 router.post('/fcm-token', protect, chatController.updateFCMToken);
+router.patch('/edit/:messageId', protect, chatController.editMessage);
+router.delete('/delete/:messageId', protect, chatController.deleteMessage);
+router.post('/reaction/:messageId', protect, chatController.toggleReaction);
 router.delete('/clear/:friendId', protect, chatController.clearHistory);
 
 module.exports = router;
