@@ -21,7 +21,8 @@ const friendshipSchema = new mongoose.Schema({
         type: Map,
         of: new mongoose.Schema({
             muteNotifications: { type: Boolean, default: false },
-            theme: { type: String, default: 'default' }
+            theme: { type: String, default: 'default' },
+            isBlocked: { type: Boolean, default: false }
         }, { _id: false }),
         default: {}
     }

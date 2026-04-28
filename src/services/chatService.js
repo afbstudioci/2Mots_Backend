@@ -35,7 +35,7 @@ exports.saveMessage = async (senderId, recipientId, data) => {
         fileId,
         duration,
         status: 'sent',
-        read: false,
+        isRead: false,
         replyTo: replyTo || null
     });
 
@@ -89,7 +89,7 @@ exports.deleteMessage = async (messageId, userId) => {
     if (message.sender.toString() !== userId.toString()) throw new Error('Non autorisé');
 
     message.text = 'Ce message a été supprimé';
-    message.isDeleted = true;
+    message.isDeletedForEveryone = true;
     message.fileUrl = null;
     message.fileId = null;
     message.type = 'text';
@@ -181,7 +181,7 @@ exports.getConversationList = async (userId) => {
                 unreadCount: {
                     $sum: {
                         $cond: [
-                            { $and: [{ $eq: ["$recipient", objectIdUser] }, { $eq: ["$read", false] }] },
+                            { $and: [{ $eq: ["$recipient", objectIdUser] }, { $eq: ["$isRead", false] }] },
                             1,
                             0
                         ]
@@ -231,8 +231,8 @@ exports.sendPushNotification = async (recipientId, senderName, messageText, type
  */
 exports.markMessagesAsRead = async (userId, friendId) => {
     return await Message.updateMany(
-        { sender: friendId, recipient: userId, read: false },
-        { $set: { read: true, status: 'read' } }
+        { sender: friendId, recipient: userId, isRead: false },
+        { $set: { isRead: true, status: 'read' } }
     );
 };
 
@@ -240,7 +240,7 @@ exports.markMessagesAsRead = async (userId, friendId) => {
  * Compte le nombre total de messages non lus pour un utilisateur
  */
 exports.getGlobalUnreadCount = async (userId) => {
-    return await Message.countDocuments({ recipient: userId, read: false });
+    return await Message.countDocuments({ recipient: userId, isRead: false });
 };
 
 /**
