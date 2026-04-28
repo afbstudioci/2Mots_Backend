@@ -20,19 +20,22 @@ exports.getUserMissions = async (userId) => {
         createdAt: { $gte: startOfDay }
     }).populate('mission');
     
-    return userMissions.map(um => ({
-        id: um.mission._id,
-        userMissionId: um._id,
-        title: um.mission.title,
-        desc: um.mission.desc,
-        reward: um.mission.reward,
-        type: um.mission.type,
-        targetValue: um.mission.targetValue,
-        targetAction: um.mission.targetAction,
-        progress: um.progress,
-        completed: um.completed,
-        claimed: um.claimed
-    }));
+    // Filtrer les missions orphelines (si la mission a été supprimée de la collection Mission)
+    return userMissions
+        .filter(um => um.mission)
+        .map(um => ({
+            id: um.mission._id,
+            userMissionId: um._id,
+            title: um.mission.title,
+            desc: um.mission.desc,
+            reward: um.mission.reward,
+            type: um.mission.type,
+            targetValue: um.mission.targetValue,
+            targetAction: um.mission.targetAction,
+            progress: um.progress,
+            completed: um.completed,
+            claimed: um.claimed
+        }));
 };
 
 /**
@@ -82,7 +85,7 @@ exports.updateMissionProgress = async (userId, targetType, increment = 1) => {
     }).populate('mission');
 
     for (const um of userMissions) {
-        if (um.mission.targetType === targetType) {
+        if (um.mission && um.mission.targetType === targetType) {
             um.progress += increment;
             if (um.progress >= um.mission.targetValue) {
                 um.progress = um.mission.targetValue;
