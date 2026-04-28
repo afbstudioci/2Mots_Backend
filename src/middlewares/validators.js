@@ -4,15 +4,15 @@ const { z } = require('zod');
 const registerSchema = z.object({
     login: z.string()
         .trim()
-        .min(3, 'Le pseudo doit faire au moins 3 caractères')
-        .max(20, 'Le pseudo ne doit pas dépasser 20 caractères'),
+        .min(3, 'Le pseudo doit faire au moins 3 caractères.')
+        .max(20, 'Le pseudo ne doit pas dépasser 20 caractères.'),
     email: z.string()
         .trim()
-        .email('Veuillez fournir un email valide'),
+        .email('Veuillez fournir un email valide.'),
     password: z.string()
-        .min(8, 'Le mot de passe doit faire au moins 8 caractères')
-        .regex(/[A-Z]/, 'Le mot de passe doit contenir au moins une majuscule')
-        .regex(/[0-9]/, 'Le mot de passe doit contenir au moins un chiffre')
+        .min(8, 'Le mot de passe doit faire au moins 8 caractères.')
+        .regex(/[A-Z]/, 'Le mot de passe doit contenir au moins une majuscule.')
+        .regex(/[0-9]/, 'Le mot de passe doit contenir au moins un chiffre.')
 });
 
 const loginSchema = z.object({
@@ -20,17 +20,20 @@ const loginSchema = z.object({
     password: z.string()
 });
 
-const validate = (schema) => (req, res, next) => {
+const validate = (schema) => async (req, res, next) => {
     try {
         if (typeof next !== 'function') {
-            console.error('[Validator] CRITICAL: next is not a function!', typeof next);
+            console.error('[Validator] CRITIQUE : next n\'est pas une fonction.');
+            return res.status(500).json({ status: 'error', message: 'Erreur interne du serveur lors de la validation.' });
         }
-        // IMPORTANT: On remplace req.body par la version parse (avec les trim() effectues)
-        req.body = schema.parse(req.body);
+        req.body = await schema.parseAsync(req.body);
         next();
     } catch (error) {
-        const errors = error.errors.map(e => e.message);
-        return res.status(400).json({ status: 'fail', message: errors[0] });
+        if (error instanceof z.ZodError) {
+            const errors = error.errors.map(e => e.message);
+            return res.status(400).json({ status: 'fail', message: errors[0] });
+        }
+        next(error);
     }
 };
 

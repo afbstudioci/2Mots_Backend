@@ -36,19 +36,19 @@ exports.login = async (req, res) => {
 exports.refreshToken = async (req, res) => {
     try {
         const { refreshToken: currentRefreshToken } = req.body;
-        
+
         if (!currentRefreshToken) {
-            return res.status(401).json({ status: 'fail', message: 'Aucun jeton de rafraîchissement fourni' });
+            return res.status(401).json({ status: 'fail', message: 'Aucun jeton de rafraîchissement fourni.' });
         }
 
         const result = await authService.refreshUserToken(currentRefreshToken);
 
-        res.status(200).json({ 
-            status: 'success', 
-            data: { 
+        res.status(200).json({
+            status: 'success',
+            data: {
                 accessToken: result.accessToken,
                 refreshToken: result.refreshToken
-            } 
+            }
         });
     } catch (error) {
         res.status(401).json({ status: 'fail', message: error.message });
@@ -58,9 +58,9 @@ exports.refreshToken = async (req, res) => {
 exports.logout = async (req, res) => {
     try {
         await authService.logoutUser(req.user.id);
-        res.status(200).json({ status: 'success', message: 'Déconnexion réussie' });
+        res.status(200).json({ status: 'success', message: 'Déconnexion réussie.' });
     } catch (error) {
-        res.status(500).json({ status: 'error', message: 'Erreur lors de la déconnexion' });
+        res.status(500).json({ status: 'error', message: 'Erreur lors de la déconnexion.' });
     }
 };
 
@@ -73,17 +73,14 @@ exports.getMe = async (req, res) => {
     }
 };
 
-// CONTROLEUR MIS A JOUR : Upload direct via le SDK officiel Cloudinary
 exports.updateProfile = async (req, res) => {
     try {
         const userId = req.user.id;
         const { login, email, currentPassword, newPassword } = req.body;
         let avatarUrl = null;
 
-        // Si on reçoit une image en mémoire
         if (req.file) {
             const uploadResult = await new Promise((resolve, reject) => {
-                // On crée un flux d'upload vers Cloudinary
                 const stream = cloudinary.uploader.upload_stream(
                     {
                         folder: '2mots_avatars',
@@ -95,10 +92,9 @@ exports.updateProfile = async (req, res) => {
                         else resolve(result);
                     }
                 );
-                // On y injecte le buffer (notre image en RAM)
                 stream.end(req.file.buffer);
             });
-            
+
             avatarUrl = uploadResult.secure_url;
         }
 
@@ -110,7 +106,7 @@ exports.updateProfile = async (req, res) => {
             avatarUrl
         });
 
-        res.status(200).json({ status: 'success', message: 'Profil mis à jour', data: { user: updatedUser } });
+        res.status(200).json({ status: 'success', message: 'Profil mis à jour avec succès.', data: { user: updatedUser } });
     } catch (error) {
         res.status(400).json({ status: 'fail', message: error.message });
     }
@@ -120,13 +116,13 @@ exports.forgotPassword = async (req, res) => {
     try {
         const { email } = req.body;
         const resetToken = await authService.requestPasswordReset(email);
-        
+
         if (!resetToken) {
-            return res.status(200).json({ status: 'success', message: 'Si cet email existe, un lien a été envoyé' });
+            return res.status(200).json({ status: 'success', message: 'Si cette adresse e-mail existe, un lien a été envoyé.' });
         }
 
-        res.status(200).json({ status: 'success', message: 'Jeton généré', data: { resetToken } });
+        res.status(200).json({ status: 'success', message: 'Jeton de réinitialisation généré.', data: { resetToken } });
     } catch (error) {
-        res.status(500).json({ status: 'error', message: 'Erreur lors de la demande' });
+        res.status(500).json({ status: 'error', message: 'Erreur lors de la demande de réinitialisation.' });
     }
 };
