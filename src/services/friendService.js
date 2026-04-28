@@ -108,10 +108,25 @@ exports.acceptFriendRequest = async (userId, requestId) => {
 exports.searchUsers = async (userId, query) => {
     if (!query) return [];
 
-    return await User.find({
+    const users = await User.find({
         login: { $regex: query, $options: 'i' },
         _id: { $ne: userId }
     }).select('login avatar level').limit(10);
+
+    const usersWithStatus = await Promise.all(users.map(async (u) => {
+        const friendship = await Friendship.findOne({
+            users: { $all: [userId, u._id] }
+        });
+
+        return {
+            ...u.toObject(),
+            friendshipStatus: friendship ? friendship.status : 'none',
+            isRequester: friendship ? friendship.requester.toString() === userId.toString() : false,
+            friendshipId: friendship ? friendship._id : null
+        };
+    }));
+
+    return usersWithStatus;
 };
 /**
  * Bloque un utilisateur

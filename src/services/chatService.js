@@ -97,8 +97,17 @@ exports.toggleReaction = async (messageId, userId, emoji) => {
  * Récupère la liste des conversations pour un utilisateur
  */
 exports.getConversationList = async (userId) => {
-    // Cette version simplifiée utilise l'agrégation pour trouver le dernier message par interlocuteur
-    const conversations = await Message.aggregate([
+    // 1. Récupérer tous les amis acceptés
+    const Friendship = require('../models/Friendship');
+    const friendships = await Friendship.find({
+        users: userId,
+        status: 'accepted'
+    }).populate('users', 'login avatar level');
+
+    const friends = friendships.map(f => f.users.find(u => u._id.toString() !== userId.toString()));
+
+    // 2. Récupérer les données de conversation (dernier message, non lus) via agrégation
+    const conversationsData = await Message.aggregate([
         {
             $match: {
                 $or: [{ sender: userId }, { recipient: userId }]
@@ -125,26 +134,30 @@ exports.getConversationList = async (userId) => {
                     }
                 }
             }
-        },
-        {
-            $lookup: {
-                from: 'users',
-                localField: '_id',
-                foreignField: '_id',
-                as: 'friend'
-            }
-        },
-        { $unwind: '$friend' },
-        {
-            $project: {
-                friend: { _id: 1, login: 1, avatar: 1 },
-                lastMessage: 1,
-                unreadCount: 1
-            }
-        },
-        { $sort: { "lastMessage.createdAt": -1 } }
+        }
     ]);
-    return conversations;
+
+    // 3. Fusionner les deux listes
+    const fullConversations = friends.map(friend => {
+        const data = conversationsData.find(d => d._id.toString() === friend._id.toString());
+        return {
+            friend: {
+                _id: friend._id,
+                login: friend.login,
+                avatar: friend.avatar,
+                level: friend.level
+            },
+            lastMessage: data ? data.lastMessage : null,
+            unreadCount: data ? data.unreadCount : 0
+        };
+    });
+
+    // 4. Trier par date du dernier message (les null à la fin)
+    return fullConversations.sort((a, b) => {
+        if (!a.lastMessage) return 1;
+        if (!b.lastMessage) return -1;
+        return new Date(b.lastMessage.createdAt).getTime() - new Date(a.lastMessage.createdAt).getTime();
+    });
 };
 
 /**
