@@ -15,20 +15,24 @@ const sendTokenResponse = (res, statusCode, result) => {
 
 exports.register = async (req, res) => {
     try {
+        console.log('[AuthController] Register attempt:', req.body.login, req.body.email);
         const { login, email, password } = req.body;
         const result = await authService.registerUser(login, email, password);
         sendTokenResponse(res, 201, result);
     } catch (error) {
+        console.error('[AuthController] Register Error:', error.message);
         res.status(400).json({ status: 'fail', message: error.message });
     }
 };
 
 exports.login = async (req, res) => {
     try {
+        console.log('[AuthController] Login attempt:', req.body.login);
         const { login, password } = req.body;
         const result = await authService.loginUser(login, password);
         sendTokenResponse(res, 200, result);
     } catch (error) {
+        console.error('[AuthController] Login Error:', error.message);
         res.status(401).json({ status: 'fail', message: error.message });
     }
 };
