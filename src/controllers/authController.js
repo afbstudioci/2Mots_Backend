@@ -3,7 +3,7 @@ const authService = require('../services/authService');
 const cloudinary = require('../config/cloudinary');
 
 const sendTokenResponse = (res, statusCode, result) => {
-    res.status(statusCode).json({
+    return res.status(statusCode).json({
         status: 'success',
         data: {
             user: result.user,
@@ -13,27 +13,27 @@ const sendTokenResponse = (res, statusCode, result) => {
     });
 };
 
-exports.register = async (req, res) => {
+exports.register = async (req, res, next) => {
     try {
         const { login, email, password } = req.body;
         const result = await authService.registerUser(login, email, password);
-        sendTokenResponse(res, 201, result);
+        return sendTokenResponse(res, 201, result);
     } catch (error) {
-        res.status(400).json({ status: 'fail', message: error.message });
+        return res.status(400).json({ status: 'fail', message: error.message });
     }
 };
 
-exports.login = async (req, res) => {
+exports.login = async (req, res, next) => {
     try {
         const { login, password } = req.body;
         const result = await authService.loginUser(login, password);
-        sendTokenResponse(res, 200, result);
+        return sendTokenResponse(res, 200, result);
     } catch (error) {
-        res.status(401).json({ status: 'fail', message: error.message });
+        return res.status(401).json({ status: 'fail', message: error.message });
     }
 };
 
-exports.refreshToken = async (req, res) => {
+exports.refreshToken = async (req, res, next) => {
     try {
         const { refreshToken: currentRefreshToken } = req.body;
 
@@ -43,7 +43,7 @@ exports.refreshToken = async (req, res) => {
 
         const result = await authService.refreshUserToken(currentRefreshToken);
 
-        res.status(200).json({
+        return res.status(200).json({
             status: 'success',
             data: {
                 accessToken: result.accessToken,
@@ -51,29 +51,29 @@ exports.refreshToken = async (req, res) => {
             }
         });
     } catch (error) {
-        res.status(401).json({ status: 'fail', message: error.message });
+        return res.status(401).json({ status: 'fail', message: error.message });
     }
 };
 
-exports.logout = async (req, res) => {
+exports.logout = async (req, res, next) => {
     try {
         await authService.logoutUser(req.user.id);
-        res.status(200).json({ status: 'success', message: 'Déconnexion réussie.' });
+        return res.status(200).json({ status: 'success', message: 'Déconnexion réussie.' });
     } catch (error) {
-        res.status(500).json({ status: 'error', message: 'Erreur lors de la déconnexion.' });
+        return res.status(500).json({ status: 'error', message: 'Erreur lors de la déconnexion.' });
     }
 };
 
-exports.getMe = async (req, res) => {
+exports.getMe = async (req, res, next) => {
     try {
         const user = await authService.getUserProfile(req.user.id);
-        res.status(200).json({ status: 'success', data: { user } });
+        return res.status(200).json({ status: 'success', data: { user } });
     } catch (error) {
-        res.status(404).json({ status: 'fail', message: error.message });
+        return res.status(404).json({ status: 'fail', message: error.message });
     }
 };
 
-exports.updateProfile = async (req, res) => {
+exports.updateProfile = async (req, res, next) => {
     try {
         const userId = req.user.id;
         const { login, email, currentPassword, newPassword } = req.body;
@@ -106,13 +106,13 @@ exports.updateProfile = async (req, res) => {
             avatarUrl
         });
 
-        res.status(200).json({ status: 'success', message: 'Profil mis à jour avec succès.', data: { user: updatedUser } });
+        return res.status(200).json({ status: 'success', message: 'Profil mis à jour avec succès.', data: { user: updatedUser } });
     } catch (error) {
-        res.status(400).json({ status: 'fail', message: error.message });
+        return res.status(400).json({ status: 'fail', message: error.message });
     }
 };
 
-exports.forgotPassword = async (req, res) => {
+exports.forgotPassword = async (req, res, next) => {
     try {
         const { email } = req.body;
         const resetToken = await authService.requestPasswordReset(email);
@@ -121,8 +121,8 @@ exports.forgotPassword = async (req, res) => {
             return res.status(200).json({ status: 'success', message: 'Si cette adresse e-mail existe, un lien a été envoyé.' });
         }
 
-        res.status(200).json({ status: 'success', message: 'Jeton de réinitialisation généré.', data: { resetToken } });
+        return res.status(200).json({ status: 'success', message: 'Jeton de réinitialisation généré.', data: { resetToken } });
     } catch (error) {
-        res.status(500).json({ status: 'error', message: 'Erreur lors de la demande de réinitialisation.' });
+        return res.status(500).json({ status: 'error', message: 'Erreur lors de la demande de réinitialisation.' });
     }
 };

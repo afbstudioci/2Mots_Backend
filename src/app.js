@@ -2,7 +2,8 @@
 const express = require('express');
 const cors = require('cors');
 const helmet = require('helmet');
-const { rateLimit } = require('express-rate-limit');
+const rateLimitModule = require('express-rate-limit');
+const rateLimit = rateLimitModule.rateLimit || rateLimitModule.default || rateLimitModule;
 require('./config/firebase');
 
 const authRoutes = require('./routes/authRoutes');
@@ -79,7 +80,7 @@ app.use((err, req, res, next) => {
     const statusCode = err.statusCode || 500;
     const isClientError = statusCode >= 400 && statusCode < 500;
 
-    res.status(statusCode).json({
+    return res.status(statusCode).json({
         status: isClientError ? 'fail' : 'error',
         message: (isClientError || process.env.NODE_ENV !== 'production')
             ? err.message
@@ -87,8 +88,8 @@ app.use((err, req, res, next) => {
     });
 });
 
-app.use((req, res) => {
-    res.status(404).json({ status: 'fail', message: 'Route non trouvée sur ce serveur.' });
+app.use((req, res, next) => {
+    return res.status(404).json({ status: 'fail', message: 'Route non trouvée sur ce serveur.' });
 });
 
 module.exports = app;

@@ -8,7 +8,7 @@ const registerSchema = z.object({
         .max(20, 'Le pseudo ne doit pas dépasser 20 caractères.'),
     email: z.string()
         .trim()
-        .email('Veuillez fournir un email valide.'),
+        .email('Veuillez fournir un e-mail valide.'),
     password: z.string()
         .min(8, 'Le mot de passe doit faire au moins 8 caractères.')
         .regex(/[A-Z]/, 'Le mot de passe doit contenir au moins une majuscule.')
@@ -20,21 +20,23 @@ const loginSchema = z.object({
     password: z.string()
 });
 
-const validate = (schema) => async (req, res, next) => {
-    try {
-        if (typeof next !== 'function') {
-            console.error('[Validator] CRITIQUE : next n\'est pas une fonction.');
-            return res.status(500).json({ status: 'error', message: 'Erreur interne du serveur lors de la validation.' });
+const validate = (schema) => {
+    return async (req, res, next) => {
+        try {
+            if (typeof next !== 'function') {
+                console.error('[Validator] CRITIQUE : next n\'est pas une fonction.');
+                return res.status(500).json({ status: 'error', message: 'Erreur interne du serveur lors de la validation.' });
+            }
+            req.body = await schema.parseAsync(req.body);
+            return next();
+        } catch (error) {
+            if (error instanceof z.ZodError) {
+                const errors = error.errors.map(e => e.message);
+                return res.status(400).json({ status: 'fail', message: errors[0] });
+            }
+            return next(error);
         }
-        req.body = await schema.parseAsync(req.body);
-        next();
-    } catch (error) {
-        if (error instanceof z.ZodError) {
-            const errors = error.errors.map(e => e.message);
-            return res.status(400).json({ status: 'fail', message: errors[0] });
-        }
-        next(error);
-    }
+    };
 };
 
 module.exports = {

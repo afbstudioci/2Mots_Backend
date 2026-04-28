@@ -1,7 +1,11 @@
 //src/routes/authRoutes.js
 const express = require('express');
 const router = express.Router();
-const { rateLimit } = require('express-rate-limit');
+
+// Import robuste pour express-rate-limit afin de prévenir les erreurs d'initialisation
+const rateLimitModule = require('express-rate-limit');
+const rateLimit = rateLimitModule.rateLimit || rateLimitModule.default || rateLimitModule;
+
 const authController = require('../controllers/authController');
 const { validateRegister, validateLogin } = require('../middlewares/validators');
 const { protect } = require('../middlewares/auth');
