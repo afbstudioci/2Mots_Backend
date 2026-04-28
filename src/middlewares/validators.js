@@ -20,26 +20,33 @@ const loginSchema = z.object({
     password: z.string()
 });
 
-const validate = (schema) => {
-    return async (req, res, next) => {
-        try {
-            if (typeof next !== 'function') {
-                console.error('[Validator] CRITIQUE : next n\'est pas une fonction.');
-                return res.status(500).json({ status: 'error', message: 'Erreur interne du serveur lors de la validation.' });
-            }
-            req.body = await schema.parseAsync(req.body);
-            return next();
-        } catch (error) {
-            if (error instanceof z.ZodError) {
-                const errors = error.errors.map(e => e.message);
-                return res.status(400).json({ status: 'fail', message: errors[0] });
-            }
-            return next(error);
+const validateRegister = async (req, res, next) => {
+    try {
+        req.body = await registerSchema.parseAsync(req.body);
+        return next();
+    } catch (error) {
+        if (error instanceof z.ZodError) {
+            const errors = error.errors.map(e => e.message);
+            return res.status(400).json({ status: 'fail', message: errors[0] });
         }
-    };
+        return next(error);
+    }
+};
+
+const validateLogin = async (req, res, next) => {
+    try {
+        req.body = await loginSchema.parseAsync(req.body);
+        return next();
+    } catch (error) {
+        if (error instanceof z.ZodError) {
+            const errors = error.errors.map(e => e.message);
+            return res.status(400).json({ status: 'fail', message: errors[0] });
+        }
+        return next(error);
+    }
 };
 
 module.exports = {
-    validateRegister: validate(registerSchema),
-    validateLogin: validate(loginSchema)
+    validateRegister,
+    validateLogin
 };
