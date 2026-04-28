@@ -20,21 +20,34 @@ const generateTokens = (userId) => {
 };
 
 exports.registerUser = async (login, email, password) => {
-    const existingUser = await User.findOne({ $or: [{ email }, { login }] });
+    const normalizedEmail = email.toLowerCase().trim();
+    const normalizedLogin = login.trim();
+
+    // Recherche insensible à la casse pour l'email et le pseudo
+    const existingUser = await User.findOne({ 
+        $or: [
+            { email: normalizedEmail }, 
+            { login: { $regex: new RegExp(`^${normalizedLogin.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`, 'i') } }
+        ] 
+    });
+
     if (existingUser) {
-        throw new Error('Un utilisateur avec cet email ou ce pseudo existe deja');
+        if (existingUser.email === normalizedEmail) {
+            throw new Error('Cet email est déjà utilisé');
+        }
+        throw new Error('Ce pseudo est déjà pris');
     }
 
     let assignedRole = 'user';
-    if (adminMail && email.toLowerCase() === adminMail.toLowerCase()) {
+    if (adminMail && normalizedEmail === adminMail.toLowerCase()) {
         assignedRole = 'superadmin';
     }
 
-    const defaultAvatar = `https://ui-avatars.com/api/?name=${encodeURIComponent(login)}&background=FF5A5F&color=fff&size=128`;
+    const defaultAvatar = `https://ui-avatars.com/api/?name=${encodeURIComponent(normalizedLogin)}&background=FF5A5F&color=fff&size=128`;
 
     const newUser = await User.create({
-        login,
-        email,
+        login: normalizedLogin,
+        email: normalizedEmail,
         password,
         avatar: defaultAvatar,
         role: assignedRole
@@ -53,10 +66,12 @@ exports.registerUser = async (login, email, password) => {
 };
 
 exports.loginUser = async (loginIdentifier, password) => {
+    const normalizedIdentifier = loginIdentifier.trim();
+    
     const user = await User.findOne({
         $or: [
-            { email: loginIdentifier.toLowerCase() }, 
-            { login: { $regex: new RegExp(`^${loginIdentifier}$`, 'i') } }
+            { email: normalizedIdentifier.toLowerCase() }, 
+            { login: { $regex: new RegExp(`^${normalizedIdentifier.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`, 'i') } }
         ]
     }).select('+password');
 

@@ -16,15 +16,19 @@ const shopRoutes = require('./routes/shopRoutes');
 
 const app = express();
 
+// Nécessaire pour que express-rate-limit lise la bonne IP sur Render/Heroku
+app.set('trust proxy', 1);
+
 app.use(helmet());
 
 const allowedOrigins = process.env.ALLOWED_ORIGINS 
     ? process.env.ALLOWED_ORIGINS.split(',') 
-    : ['http://localhost:8081', 'http://localhost:3000'];
+    : [];
 
 app.use(cors({
     origin: function (origin, callback) {
-        if (!origin || allowedOrigins.includes('*') || allowedOrigins.includes(origin)) {
+        // Autoriser si : pas d'origine (mobile), '*' dans la liste, ou origine présente dans la liste
+        if (!origin || allowedOrigins.includes('*') || allowedOrigins.includes(origin) || allowedOrigins.length === 0) {
             callback(null, true);
         } else {
             callback(new Error('Non autorisé par les règles CORS'));
