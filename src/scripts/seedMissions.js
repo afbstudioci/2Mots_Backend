@@ -11,7 +11,8 @@ const missions = [
         reward: 15,
         type: 'daily',
         targetType: 'words_solved',
-        targetValue: 5
+        targetValue: 5,
+        targetAction: 'Game'
     },
     {
         title: "Maître des Liens",
@@ -19,7 +20,8 @@ const missions = [
         reward: 50,
         type: 'achievement',
         targetType: 'levels_reached',
-        targetValue: 5
+        targetValue: 5,
+        targetAction: 'Game'
     },
     {
         title: "Socialite",
@@ -27,7 +29,8 @@ const missions = [
         reward: 20,
         type: 'achievement',
         targetType: 'friends_added',
-        targetValue: 1
+        targetValue: 1,
+        targetAction: 'Friends'
     }
 ];
 
