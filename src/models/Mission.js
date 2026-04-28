@@ -29,6 +29,10 @@ const missionSchema = new mongoose.Schema({
         type: Number,
         required: true
     },
+    targetAction: {
+        type: String,
+        default: 'Home' // Route par défaut
+    },
     isActive: {
         type: Boolean,
         default: true

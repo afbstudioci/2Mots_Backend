@@ -83,6 +83,9 @@ const checkAnswerRealtime = async (userId, wordPairId, userAnswer, timeSpent) =>
             earnedKevs += 5;
             user.kevs += 5;
 
+            // Mission : Niveaux atteints
+            await missionService.updateMissionProgress(userId, 'levels_reached');
+
             // Logique de parrainage : Recompense au niveau 2
             if (newLevel === 2 && user.referredBy && !user.referralRewardClaimed) {
                 user.kevs += 100;

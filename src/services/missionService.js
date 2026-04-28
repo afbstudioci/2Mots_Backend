@@ -28,6 +28,7 @@ exports.getUserMissions = async (userId) => {
         reward: um.mission.reward,
         type: um.mission.type,
         targetValue: um.mission.targetValue,
+        targetAction: um.mission.targetAction,
         progress: um.progress,
         completed: um.completed,
         claimed: um.claimed
@@ -96,23 +97,26 @@ exports.updateMissionProgress = async (userId, targetType, increment = 1) => {
  * Réclame la récompense
  */
 exports.claimMissionReward = async (userId, missionId) => {
-    const userMission = await UserMission.findOne({ 
-        user: userId, 
-        mission: missionId,
-        completed: true,
-        claimed: false
-    }).populate('mission');
+    const updatedMission = await UserMission.findOneAndUpdate(
+        { 
+            user: userId, 
+            mission: missionId,
+            completed: true,
+            claimed: false
+        },
+        { $set: { claimed: true } },
+        { new: true }
+    ).populate('mission');
 
-    if (!userMission) {
-        throw new Error("Mission non complétée ou déjà réclamée");
+    if (!updatedMission) {
+        throw new Error("Mission non complétée, déjà réclamée ou inexistante");
     }
 
-    userMission.claimed = true;
-    await userMission.save();
-
-    const user = await User.findById(userId);
-    user.kevs += userMission.mission.reward;
-    await user.save();
+    const user = await User.findByIdAndUpdate(
+        userId,
+        { $inc: { kevs: updatedMission.mission.reward } },
+        { new: true }
+    );
 
     return { newKevs: user.kevs };
 };
