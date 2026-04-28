@@ -1,7 +1,7 @@
 //src/routes/authRoutes.js
 const express = require('express');
 const router = express.Router();
-const { rateLimit } = require('express-rate-limit');
+const rateLimit = require('express-rate-limit');
 const authController = require('../controllers/authController');
 const { protect } = require('../middlewares/auth');
 const upload = require('../middlewares/uploadMiddleware');

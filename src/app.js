@@ -2,8 +2,7 @@
 const express = require('express');
 const cors = require('cors');
 const helmet = require('helmet');
-const rateLimitModule = require('express-rate-limit');
-const rateLimit = rateLimitModule.rateLimit || rateLimitModule.default || rateLimitModule;
+const rateLimit = require('express-rate-limit');
 require('./config/firebase');
 
 const authRoutes = require('./routes/authRoutes');
