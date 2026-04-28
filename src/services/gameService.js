@@ -1,6 +1,6 @@
-//src/services/gameService.js
 const WordPair = require('../models/WordPair');
 const User = require('../models/User');
+const missionService = require('./missionService');
 
 const normalizeText = (text) => {
     if (!text) return "";
@@ -65,6 +65,7 @@ const checkAnswerRealtime = async (userId, wordPairId, userAnswer, timeSpent) =>
     let newLevel = user.level;
 
     if (isCorrect) {
+        await missionService.updateMissionProgress(userId, 'words_solved');
         earnedKevs = 1;
         user.kevs += earnedKevs;
 

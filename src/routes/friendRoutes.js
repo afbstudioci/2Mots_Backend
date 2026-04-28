@@ -11,5 +11,6 @@ router.post('/request/:id', protect, friendController.sendRequest);
 router.post('/accept/:id', protect, friendController.acceptRequest);
 router.get('/search', protect, friendController.search);
 router.post('/block/:id', protect, friendController.blockUser);
+router.post('/referral', protect, friendController.useReferralCode);
 
 module.exports = router;

@@ -95,6 +95,11 @@ exports.acceptFriendRequest = async (userId, requestId) => {
     friendship.status = 'accepted';
     await friendship.save();
 
+    // Progression Mission pour les deux !
+    const missionService = require('./missionService');
+    await missionService.updateMissionProgress(userId, 'friends_added');
+    await missionService.updateMissionProgress(friendship.requester, 'friends_added');
+
     // Notification push à celui qui avait envoyé la demande
     const accepter = await User.findById(userId).select('login');
     pushService.onFriendRequestAccepted(friendship.requester, accepter.login);
