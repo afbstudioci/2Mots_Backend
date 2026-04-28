@@ -12,16 +12,19 @@ exports.getFriendList = async (userId) => {
         status: 'accepted'
     }).populate('users', 'login avatar level status');
 
-    return friendships.map(f => {
-        const friend = f.users.find(u => u._id.toString() !== userId.toString());
-        return {
-            id: friend._id,
-            name: friend.login,
-            avatar: friend.avatar,
-            level: friend.level,
-            status: friend.status || 'offline'
-        };
-    });
+    return friendships
+        .map(f => {
+            const friend = f.users.find(u => u && u._id.toString() !== userId.toString());
+            if (!friend) return null;
+            return {
+                id: friend._id,
+                name: friend.login,
+                avatar: friend.avatar,
+                level: friend.level,
+                status: friend.status || 'offline'
+            };
+        })
+        .filter(f => f !== null);
 };
 
 /**

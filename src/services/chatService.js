@@ -104,7 +104,9 @@ exports.getConversationList = async (userId) => {
         status: 'accepted'
     }).populate('users', 'login avatar level');
 
-    const friends = friendships.map(f => f.users.find(u => u._id.toString() !== userId.toString()));
+    const friends = friendships
+        .map(f => f.users.find(u => u && u._id.toString() !== userId.toString()))
+        .filter(friend => friend); // Retirer les amis qui n'existent plus en DB
 
     // 2. Récupérer les données de conversation (dernier message, non lus) via agrégation
     const conversationsData = await Message.aggregate([
