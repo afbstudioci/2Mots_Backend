@@ -1,26 +1,27 @@
+//src/models/User.js
 const mongoose = require('mongoose');
 const bcrypt = require('bcryptjs');
 
 const userSchema = new mongoose.Schema({
-    login: { 
-        type: String, 
-        required: [true, 'Le pseudo est obligatoire'], 
+    login: {
+        type: String,
+        required: [true, 'Le pseudo est obligatoire'],
         unique: true,
         trim: true,
-        minlength: [3, 'Le pseudo doit contenir au moins 3 caracteres']
+        minlength: [3, 'Le pseudo doit contenir au moins 3 caractères']
     },
-    email: { 
-        type: String, 
-        required: [true, 'L\'email est obligatoire'], 
+    email: {
+        type: String,
+        required: [true, 'L\'e-mail est obligatoire'],
         unique: true,
         lowercase: true,
         trim: true
     },
-    password: { 
-        type: String, 
+    password: {
+        type: String,
         required: [true, 'Le mot de passe est obligatoire'],
-        minlength: [8, 'Le mot de passe doit contenir au moins 8 caracteres'],
-        select: false 
+        minlength: [8, 'Le mot de passe doit contenir au moins 8 caractères'],
+        select: false
     },
     avatar: {
         type: String,
@@ -47,15 +48,14 @@ const userSchema = new mongoose.Schema({
         type: Number,
         default: 1
     },
-    // NOUVEAU : Tableau d'objets avec Date de cooldown
     playedWords: [{
-        word: { 
-            type: mongoose.Schema.Types.ObjectId, 
+        word: {
+            type: mongoose.Schema.Types.ObjectId,
             ref: 'WordPair'
         },
         cooldownUntil: {
             type: Date,
-            default: null // Null signifie vu, mais plus en cooldown
+            default: null
         }
     }],
     isBanned: {
@@ -84,25 +84,20 @@ const userSchema = new mongoose.Schema({
     }
 }, { timestamps: true });
 
-// Index composé pour optimiser la recherche des mots en cooldown
 userSchema.index({ 'playedWords.word': 1, 'playedWords.cooldownUntil': 1 });
 
-userSchema.pre('save', async function(next) {
-    // 1. Hash password
+userSchema.pre('save', async function () {
     if (this.isModified('password')) {
         const salt = await bcrypt.genSalt(12);
         this.password = await bcrypt.hash(this.password, salt);
     }
 
-    // 2. Generate referral code
     if (!this.referralCode) {
         this.referralCode = Math.random().toString(36).substring(2, 8).toUpperCase();
     }
-
-    next();
 });
 
-userSchema.methods.comparePassword = async function(candidatePassword, userPassword) {
+userSchema.methods.comparePassword = async function (candidatePassword, userPassword) {
     return await bcrypt.compare(candidatePassword, userPassword);
 };
 
