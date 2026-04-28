@@ -149,3 +149,26 @@ exports.clearHistory = async (req, res) => {
         res.status(500).json({ status: 'error', message: error.message });
     }
 };
+/**
+ * Récupère les paramètres de discussion
+ */
+exports.getSettings = async (req, res) => {
+    try {
+        const settings = await chatService.getChatSettings(req.user.id, req.params.friendId);
+        res.status(200).json({ status: 'success', data: settings });
+    } catch (error) {
+        res.status(500).json({ status: 'error', message: error.message });
+    }
+};
+
+/**
+ * Met à jour les paramètres de discussion
+ */
+exports.updateSettings = async (req, res) => {
+    try {
+        const settings = await chatService.updateChatSettings(req.user.id, req.params.friendId, req.body);
+        res.status(200).json({ status: 'success', data: settings });
+    } catch (error) {
+        res.status(500).json({ status: 'error', message: error.message });
+    }
+};

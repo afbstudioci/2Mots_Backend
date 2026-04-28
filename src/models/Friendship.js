@@ -15,6 +15,15 @@ const friendshipSchema = new mongoose.Schema({
         type: mongoose.Schema.Types.ObjectId,
         ref: 'User',
         required: true
+    },
+    // Paramètres personnalisés par discussion
+    settings: {
+        type: Map,
+        of: new mongoose.Schema({
+            muteNotifications: { type: Boolean, default: false },
+            theme: { type: String, default: 'default' }
+        }, { _id: false }),
+        default: {}
     }
 }, { timestamps: true });
 

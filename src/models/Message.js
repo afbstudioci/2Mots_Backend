@@ -59,6 +59,12 @@ const messageSchema = new mongoose.Schema({
         type: mongoose.Schema.Types.ObjectId,
         ref: 'Message',
         default: null
+    },
+    // Champ pour la suppression automatique (TTL)
+    expireAt: {
+        type: Date,
+        default: null,
+        index: { expires: '30d' } // MongoDB supprimera le doc 30 jours après cette date
     }
 }, { timestamps: true });
 

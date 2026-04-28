@@ -16,5 +16,7 @@ router.patch('/edit/:messageId', protect, chatController.editMessage);
 router.delete('/delete/:messageId', protect, chatController.deleteMessage);
 router.post('/reaction/:messageId', protect, chatController.toggleReaction);
 router.delete('/clear/:friendId', protect, chatController.clearHistory);
+router.get('/settings/:friendId', protect, chatController.getSettings);
+router.patch('/settings/:friendId', protect, chatController.updateSettings);
 
 module.exports = router;

@@ -74,7 +74,44 @@ exports.deleteMessage = async (messageId, userId) => {
     message.isDeleted = true;
     message.fileUrl = null;
     message.fileId = null;
+    message.type = 'text'; 
+    message.expireAt = new Date(); // Déclenche le compte à rebours de 30 jours pour la suppression définitive
     return await message.save();
+};
+
+/**
+ * Met à jour les paramètres d'une discussion spécifique
+ */
+exports.updateChatSettings = async (userId, friendId, settings) => {
+    const Friendship = require('../models/Friendship');
+    const friendship = await Friendship.findOne({
+        users: { $all: [userId, friendId] }
+    });
+
+    if (!friendship) throw new Error('Relation non trouvée');
+
+    // On met à jour ou on initialise les paramètres pour cet utilisateur
+    const userSettings = friendship.settings.get(userId.toString()) || { muteNotifications: false, theme: 'default' };
+    
+    if (settings.muteNotifications !== undefined) userSettings.muteNotifications = settings.muteNotifications;
+    if (settings.theme !== undefined) userSettings.theme = settings.theme;
+
+    friendship.settings.set(userId.toString(), userSettings);
+    await friendship.save();
+    return userSettings;
+};
+
+/**
+ * Récupère les paramètres d'une discussion
+ */
+exports.getChatSettings = async (userId, friendId) => {
+    const Friendship = require('../models/Friendship');
+    const friendship = await Friendship.findOne({
+        users: { $all: [userId, friendId] }
+    });
+
+    if (!friendship) return { muteNotifications: false, theme: 'default' };
+    return friendship.settings.get(userId.toString()) || { muteNotifications: false, theme: 'default' };
 };
 
 /**
