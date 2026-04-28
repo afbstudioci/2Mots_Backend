@@ -64,6 +64,7 @@ app.get('/api/health', (req, res) => {
 
 app.use((err, req, res, next) => {
     console.error(`[Erreur Système] ${err.message}`);
+    console.error(err.stack);
     
     if (err.code === 11000) {
         const field = Object.keys(err.keyValue)[0];

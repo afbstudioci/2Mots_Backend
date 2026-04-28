@@ -22,6 +22,9 @@ const loginSchema = z.object({
 
 const validate = (schema) => (req, res, next) => {
     try {
+        if (typeof next !== 'function') {
+            console.error('[Validator] CRITICAL: next is not a function!', typeof next);
+        }
         // IMPORTANT: On remplace req.body par la version parse (avec les trim() effectues)
         req.body = schema.parse(req.body);
         next();
