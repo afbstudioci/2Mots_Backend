@@ -1,3 +1,4 @@
+//src/models/Message.js
 const mongoose = require('mongoose');
 
 const messageSchema = new mongoose.Schema({
@@ -34,12 +35,11 @@ const messageSchema = new mongoose.Schema({
         enum: ['sent', 'delivered', 'read'],
         default: 'sent'
     },
-    read: {
+    isRead: {
         type: Boolean,
         default: false
     },
-    // Nouveaux champs pour la refonte
-    isDeleted: {
+    isDeletedForEveryone: {
         type: Boolean,
         default: false
     },
@@ -60,7 +60,6 @@ const messageSchema = new mongoose.Schema({
         ref: 'Message',
         default: null
     },
-    // Champ pour la suppression automatique (TTL)
     expireAt: {
         type: Date,
         default: null,

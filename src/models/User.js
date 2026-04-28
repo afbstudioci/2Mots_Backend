@@ -85,7 +85,16 @@ const userSchema = new mongoose.Schema({
     fcmToken: {
         type: String,
         default: null
-    }
+    },
+    blockedUsers: [{
+        type: mongoose.Schema.Types.ObjectId,
+        ref: 'User'
+    }],
+    chatSettings: [{
+        friendId: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
+        isMuted: { type: Boolean, default: false },
+        theme: { type: String, default: 'default' }
+    }]
 }, { timestamps: true });
 
 userSchema.index({ 'playedWords.word': 1, 'playedWords.cooldownUntil': 1 });

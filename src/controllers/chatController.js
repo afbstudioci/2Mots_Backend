@@ -37,13 +37,13 @@ exports.uploadMedia = async (req, res) => {
             stream.end(req.file.buffer);
         });
 
-        res.status(200).json({ 
-            status: 'success', 
-            data: { 
-                fileUrl: uploadResult.secure_url, 
+        res.status(200).json({
+            status: 'success',
+            data: {
+                fileUrl: uploadResult.secure_url,
                 fileId: uploadResult.public_id,
                 duration: uploadResult.duration || null
-            } 
+            }
         });
     } catch (error) {
         res.status(500).json({ status: 'error', message: error.message });
@@ -59,11 +59,12 @@ exports.updateFCMToken = async (req, res) => {
         const user = await require('../models/User').findById(req.user.id);
         user.fcmToken = token;
         await user.save();
-        res.status(200).json({ status: 'success', message: 'Token FCM mis à jour' });
+        res.status(200).json({ status: 'success', message: 'Token FCM mis à jour avec succès' });
     } catch (error) {
         res.status(500).json({ status: 'error', message: error.message });
     }
 };
+
 /**
  * Marque les messages comme lus
  */
@@ -149,6 +150,7 @@ exports.clearHistory = async (req, res) => {
         res.status(500).json({ status: 'error', message: error.message });
     }
 };
+
 /**
  * Récupère les paramètres de discussion
  */
@@ -162,7 +164,7 @@ exports.getSettings = async (req, res) => {
 };
 
 /**
- * Met à jour les paramètres de discussion
+ * Met à jour les paramètres de discussion (sourdine, thème, blocage)
  */
 exports.updateSettings = async (req, res) => {
     try {

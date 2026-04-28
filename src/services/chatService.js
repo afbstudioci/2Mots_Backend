@@ -1,5 +1,7 @@
 //src/services/chatService.js
+const mongoose = require('mongoose');
 const Message = require('../models/Message');
+const Friendship = require('../models/Friendship');
 const pushService = require('./notificationService');
 
 /**
@@ -7,6 +9,22 @@ const pushService = require('./notificationService');
  */
 exports.saveMessage = async (senderId, recipientId, data) => {
     const { text, type, fileUrl, fileId, duration, replyTo } = data;
+
+    const friendship = await Friendship.findOne({
+        users: { $all: [senderId, recipientId] }
+    });
+
+    if (friendship) {
+        const recipientSettings = friendship.settings.get(recipientId.toString());
+        const senderSettings = friendship.settings.get(senderId.toString());
+
+        if (recipientSettings && recipientSettings.isBlocked) {
+            throw new Error('Vous avez été bloqué par cet utilisateur.');
+        }
+        if (senderSettings && senderSettings.isBlocked) {
+            throw new Error('Vous avez bloqué cet utilisateur.');
+        }
+    }
 
     const message = await Message.create({
         sender: senderId,
@@ -37,12 +55,12 @@ exports.getChatHistory = async (userId, otherUserId, limit = 50) => {
             { sender: otherUserId, recipient: userId }
         ]
     })
-    .sort({ createdAt: -1 }) // Inversed for easier frontend handling
-    .limit(limit)
-    .populate([
-        { path: 'sender', select: 'login avatar' },
-        { path: 'replyTo' }
-    ]);
+        .sort({ createdAt: -1 })
+        .limit(limit)
+        .populate([
+            { path: 'sender', select: 'login avatar' },
+            { path: 'replyTo' }
+        ]);
 };
 
 /**
@@ -52,7 +70,7 @@ exports.editMessage = async (messageId, userId, newText) => {
     const message = await Message.findById(messageId);
     if (!message) throw new Error('Message non trouvé');
     if (message.sender.toString() !== userId.toString()) throw new Error('Non autorisé');
-    
+
     const diff = Date.now() - new Date(message.createdAt).getTime();
     if (diff > 24 * 60 * 60 * 1000) throw new Error('Délai de 24h dépassé');
 
@@ -74,8 +92,8 @@ exports.deleteMessage = async (messageId, userId) => {
     message.isDeleted = true;
     message.fileUrl = null;
     message.fileId = null;
-    message.type = 'text'; 
-    message.expireAt = new Date(); // Déclenche le compte à rebours de 30 jours pour la suppression définitive
+    message.type = 'text';
+    message.expireAt = new Date();
     return await message.save();
 };
 
@@ -83,18 +101,17 @@ exports.deleteMessage = async (messageId, userId) => {
  * Met à jour les paramètres d'une discussion spécifique
  */
 exports.updateChatSettings = async (userId, friendId, settings) => {
-    const Friendship = require('../models/Friendship');
     const friendship = await Friendship.findOne({
         users: { $all: [userId, friendId] }
     });
 
     if (!friendship) throw new Error('Relation non trouvée');
 
-    // On met à jour ou on initialise les paramètres pour cet utilisateur
-    const userSettings = friendship.settings.get(userId.toString()) || { muteNotifications: false, theme: 'default' };
-    
+    const userSettings = friendship.settings.get(userId.toString()) || { muteNotifications: false, theme: 'default', isBlocked: false };
+
     if (settings.muteNotifications !== undefined) userSettings.muteNotifications = settings.muteNotifications;
     if (settings.theme !== undefined) userSettings.theme = settings.theme;
+    if (settings.isBlocked !== undefined) userSettings.isBlocked = settings.isBlocked;
 
     friendship.settings.set(userId.toString(), userSettings);
     await friendship.save();
@@ -105,13 +122,12 @@ exports.updateChatSettings = async (userId, friendId, settings) => {
  * Récupère les paramètres d'une discussion
  */
 exports.getChatSettings = async (userId, friendId) => {
-    const Friendship = require('../models/Friendship');
     const friendship = await Friendship.findOne({
         users: { $all: [userId, friendId] }
     });
 
-    if (!friendship) return { muteNotifications: false, theme: 'default' };
-    return friendship.settings.get(userId.toString()) || { muteNotifications: false, theme: 'default' };
+    if (!friendship) return { muteNotifications: false, theme: 'default', isBlocked: false };
+    return friendship.settings.get(userId.toString()) || { muteNotifications: false, theme: 'default', isBlocked: false };
 };
 
 /**
@@ -131,11 +147,11 @@ exports.toggleReaction = async (messageId, userId, emoji) => {
 };
 
 /**
- * Récupère la liste des conversations pour un utilisateur
+ * Récupère la liste des conversations pour un utilisateur (avec pré-chargement)
  */
 exports.getConversationList = async (userId) => {
-    // 1. Récupérer tous les amis acceptés
-    const Friendship = require('../models/Friendship');
+    const objectIdUser = new mongoose.Types.ObjectId(userId);
+
     const friendships = await Friendship.find({
         users: userId,
         status: 'accepted'
@@ -143,13 +159,12 @@ exports.getConversationList = async (userId) => {
 
     const friends = friendships
         .map(f => f.users.find(u => u && u._id.toString() !== userId.toString()))
-        .filter(friend => friend); // Retirer les amis qui n'existent plus en DB
+        .filter(friend => friend);
 
-    // 2. Récupérer les données de conversation (dernier message, non lus) via agrégation
     const conversationsData = await Message.aggregate([
         {
             $match: {
-                $or: [{ sender: userId }, { recipient: userId }]
+                $or: [{ sender: objectIdUser }, { recipient: objectIdUser }]
             }
         },
         { $sort: { createdAt: -1 } },
@@ -157,26 +172,31 @@ exports.getConversationList = async (userId) => {
             $group: {
                 _id: {
                     $cond: [
-                        { $eq: ["$sender", userId] },
+                        { $eq: ["$sender", objectIdUser] },
                         "$recipient",
                         "$sender"
                     ]
                 },
-                lastMessage: { $first: "$$ROOT" },
+                recentMessages: { $push: "$$ROOT" },
                 unreadCount: {
                     $sum: {
                         $cond: [
-                            { $and: [{ $eq: ["$recipient", userId] }, { $eq: ["$read", false] }] },
+                            { $and: [{ $eq: ["$recipient", objectIdUser] }, { $eq: ["$read", false] }] },
                             1,
                             0
                         ]
                     }
                 }
             }
+        },
+        {
+            $project: {
+                recentMessages: { $slice: ["$recentMessages", 20] },
+                unreadCount: 1
+            }
         }
     ]);
 
-    // 3. Fusionner les deux listes
     const fullConversations = friends.map(friend => {
         const data = conversationsData.find(d => d._id.toString() === friend._id.toString());
         return {
@@ -186,12 +206,12 @@ exports.getConversationList = async (userId) => {
                 avatar: friend.avatar,
                 level: friend.level
             },
-            lastMessage: data ? data.lastMessage : null,
+            recentMessages: data ? data.recentMessages : [],
+            lastMessage: data && data.recentMessages.length > 0 ? data.recentMessages[0] : null,
             unreadCount: data ? data.unreadCount : 0
         };
     });
 
-    // 4. Trier par date du dernier message (les null à la fin)
     return fullConversations.sort((a, b) => {
         if (!a.lastMessage) return 1;
         if (!b.lastMessage) return -1;
