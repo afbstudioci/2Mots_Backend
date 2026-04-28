@@ -7,10 +7,10 @@ const { validateRegister, validateLogin } = require('../middlewares/validators')
 const { protect } = require('../middlewares/auth');
 const upload = require('../middlewares/uploadMiddleware');
 
-// Limiteur strict : uniquement pour proteger l'authentification (10 tentatives)
+// Limiteur strict : uniquement pour proteger l'authentification (30 tentatives)
 const authLimiter = rateLimit({
     windowMs: 15 * 60 * 1000,
-    max: 10,
+    max: 30,
     message: { status: 'error', message: 'Trop de tentatives. Veuillez réessayer dans 15 minutes.' }
 });
 
