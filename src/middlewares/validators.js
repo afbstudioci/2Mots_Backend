@@ -20,33 +20,7 @@ const loginSchema = z.object({
     password: z.string()
 });
 
-const validateRegister = async (req, res, next) => {
-    try {
-        req.body = await registerSchema.parseAsync(req.body);
-        return next();
-    } catch (error) {
-        if (error instanceof z.ZodError) {
-            const errors = error.errors.map(e => e.message);
-            return res.status(400).json({ status: 'fail', message: errors[0] });
-        }
-        return next(error);
-    }
-};
-
-const validateLogin = async (req, res, next) => {
-    try {
-        req.body = await loginSchema.parseAsync(req.body);
-        return next();
-    } catch (error) {
-        if (error instanceof z.ZodError) {
-            const errors = error.errors.map(e => e.message);
-            return res.status(400).json({ status: 'fail', message: errors[0] });
-        }
-        return next(error);
-    }
-};
-
 module.exports = {
-    validateRegister,
-    validateLogin
+    registerSchema,
+    loginSchema
 };

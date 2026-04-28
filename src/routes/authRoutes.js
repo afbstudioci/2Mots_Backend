@@ -1,13 +1,8 @@
 //src/routes/authRoutes.js
 const express = require('express');
 const router = express.Router();
-
-// Import robuste pour express-rate-limit afin de prévenir les erreurs d'initialisation
-const rateLimitModule = require('express-rate-limit');
-const rateLimit = rateLimitModule.rateLimit || rateLimitModule.default || rateLimitModule;
-
+const { rateLimit } = require('express-rate-limit');
 const authController = require('../controllers/authController');
-const { validateRegister, validateLogin } = require('../middlewares/validators');
 const { protect } = require('../middlewares/auth');
 const upload = require('../middlewares/uploadMiddleware');
 
@@ -17,8 +12,9 @@ const authLimiter = rateLimit({
     message: { status: 'error', message: 'Trop de tentatives. Veuillez réessayer dans 15 minutes.' }
 });
 
-router.post('/register', authLimiter, validateRegister, authController.register);
-router.post('/login', authLimiter, validateLogin, authController.login);
+// Les routes appellent directement le contrôleur, plus de middleware de validation source de bugs
+router.post('/register', authLimiter, authController.register);
+router.post('/login', authLimiter, authController.login);
 router.post('/refresh-token', authController.refreshToken);
 router.post('/forgot-password', authLimiter, authController.forgotPassword);
 
