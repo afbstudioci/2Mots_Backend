@@ -21,7 +21,8 @@ exports.register = async (req, res) => {
         const validatedData = await registerSchema.parseAsync(req.body);
 
         const { login, email, password } = validatedData;
-        const result = await authService.registerUser(login, email, password);
+        const { referralCode } = req.body;
+        const result = await authService.registerUser(login, email, password, referralCode);
         return sendTokenResponse(res, 201, result);
     } catch (error) {
         if (error instanceof z.ZodError) {

@@ -82,6 +82,20 @@ const checkAnswerRealtime = async (userId, wordPairId, userAnswer, timeSpent) =>
             leveledUp = true;
             earnedKevs += 5;
             user.kevs += 5;
+
+            // Logique de parrainage : Recompense au niveau 2
+            if (newLevel === 2 && user.referredBy && !user.referralRewardClaimed) {
+                user.kevs += 100;
+                user.referralRewardClaimed = true;
+                
+                // Credit du parrain
+                const referrer = await User.findById(user.referredBy);
+                if (referrer) {
+                    referrer.kevs += 500;
+                    await referrer.save();
+                    // Note: On pourrait envoyer une notification Push ici
+                }
+            }
         }
 
         if (timeSpent <= 5) {

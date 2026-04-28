@@ -19,7 +19,7 @@ const generateTokens = (userId) => {
     return { accessToken, refreshToken };
 };
 
-exports.registerUser = async (login, email, password) => {
+exports.registerUser = async (login, email, password, referredByCode = null) => {
     const normalizedEmail = email.toLowerCase().trim();
     const normalizedLogin = login.trim();
 
@@ -38,6 +38,14 @@ exports.registerUser = async (login, email, password) => {
         throw new Error('Ce pseudo est déjà pris');
     }
 
+    let referredByUser = null;
+    if (referredByCode) {
+        referredByUser = await User.findOne({ referralCode: referredByCode.toUpperCase() });
+        if (!referredByUser) {
+            throw new Error('Code de parrainage invalide');
+        }
+    }
+
     let assignedRole = 'user';
     if (adminMail && normalizedEmail === adminMail.toLowerCase()) {
         assignedRole = 'superadmin';
@@ -50,7 +58,8 @@ exports.registerUser = async (login, email, password) => {
         email: normalizedEmail,
         password,
         avatar: defaultAvatar,
-        role: assignedRole
+        role: assignedRole,
+        referredBy: referredByUser ? referredByUser._id : null
     });
 
     const { accessToken, refreshToken } = generateTokens(newUser._id);
