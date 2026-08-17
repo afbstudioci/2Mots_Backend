@@ -1,4 +1,4 @@
-//src/controllers/authController.js
+﻿//src/controllers/authController.js
 const authService = require('../services/authService');
 const cloudinary = require('../config/cloudinary');
 const { registerSchema, loginSchema } = require('../middlewares/validators');
@@ -17,11 +17,12 @@ const sendTokenResponse = (res, statusCode, result) => {
 
 exports.register = async (req, res) => {
     try {
-        // Validation directe : on évite le middleware et le fameux 'next'
         const validatedData = await registerSchema.parseAsync(req.body);
 
         const { login, email, password } = validatedData;
-        const { referralCode } = req.body;
+        const referralCode = (req.body.referralCode && typeof req.body.referralCode === 'string') 
+            ? req.body.referralCode.trim() 
+            : null;
         const result = await authService.registerUser(login, email, password, referralCode);
         return sendTokenResponse(res, 201, result);
     } catch (error) {
@@ -35,7 +36,6 @@ exports.register = async (req, res) => {
 
 exports.login = async (req, res) => {
     try {
-        // Validation directe
         const validatedData = await loginSchema.parseAsync(req.body);
 
         const { login, password } = validatedData;

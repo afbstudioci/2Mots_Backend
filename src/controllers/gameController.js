@@ -1,4 +1,4 @@
-//src/controllers/gameController.js
+﻿//src/controllers/gameController.js
 const WordPair = require('../models/WordPair');
 const User = require('../models/User');
 const gameService = require('../services/gameService');
@@ -12,55 +12,57 @@ exports.getBatch = async (req, res) => {
 
         const now = new Date();
         const excludedWordIds = user.playedWords
-            .filter(pw => pw.cooldownUntil && pw.cooldownUntil > now)
-            .map(pw => pw.word);
+            .filter((pw) => pw.cooldownUntil && pw.cooldownUntil > now)
+            .map((pw) => pw.word);
 
         const maxDifficulty = Math.min(10, user.level);
         const minDifficulty = Math.max(1, maxDifficulty - 2);
 
-        // Projet allégé : Plus d'icônes envoyées au front !
         let words = await WordPair.aggregate([
-            { 
-                $match: { 
-                    _id: { $nin: excludedWordIds }, 
+            {
+                $match: {
+                    _id: { $nin: excludedWordIds },
                     isActive: true,
-                    difficulty: { $gte: minDifficulty, $lte: maxDifficulty }
-                } 
+                    difficulty: { $gte: minDifficulty, $lte: maxDifficulty },
+                },
             },
             { $sample: { size: 10 } },
-            { $project: { word1: 1, word2: 1, clue: 1, expectedType: 1, difficulty: 1 } } 
+            { $project: { word1: 1, word2: 1, clue: 1, expectedType: 1, exactMatch: 1, distractors: 1, difficulty: 1 } },
         ]);
 
         if (words.length < 10) {
             words = await WordPair.aggregate([
-                { 
-                    $match: { 
-                        _id: { $nin: excludedWordIds }, 
+                {
+                    $match: {
+                        _id: { $nin: excludedWordIds },
                         isActive: true,
-                        difficulty: { $lte: maxDifficulty }
-                    } 
+                        difficulty: { $lte: maxDifficulty },
+                    },
                 },
                 { $sample: { size: 10 } },
-                { $project: { word1: 1, word2: 1, clue: 1, expectedType: 1, difficulty: 1 } }
+                { $project: { word1: 1, word2: 1, clue: 1, expectedType: 1, exactMatch: 1, distractors: 1, difficulty: 1 } },
             ]);
         }
-        
+
         if (words.length < 10) {
             words = await WordPair.aggregate([
                 { $match: { isActive: true } },
                 { $sample: { size: 10 } },
-                { $project: { word1: 1, word2: 1, clue: 1, expectedType: 1, difficulty: 1 } }
+                { $project: { word1: 1, word2: 1, clue: 1, expectedType: 1, exactMatch: 1, distractors: 1, difficulty: 1 } },
             ]);
         }
 
-        res.status(200).json({ 
-            status: 'success', 
-            data: words,
+        // Enrichissement avec 3 options de meme categorie grammaticale
+        const enrichedBatch = await gameService.enrichPairsWithOptions(words);
+
+        res.status(200).json({
+            status: 'success',
+            data: enrichedBatch,
             userStats: {
                 level: user.level,
                 xp: user.xp,
-                xpNeeded: 3 + (user.level * 2) // Formule synchrone avec le service
-            }
+                xpNeeded: 3 + user.level * 2,
+            },
         });
     } catch (error) {
         res.status(500).json({ status: 'error', message: error.message });
@@ -73,7 +75,7 @@ exports.checkAnswer = async (req, res) => {
         const userId = req.user.id;
 
         if (!wordPairId || answer === undefined || timeSpent === undefined) {
-            return res.status(400).json({ status: 'error', message: 'Données manquantes' });
+            return res.status(400).json({ status: 'error', message: 'Donnees manquantes' });
         }
 
         const result = await gameService.checkAnswerRealtime(userId, wordPairId, answer, timeSpent);

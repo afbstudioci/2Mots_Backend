@@ -1,11 +1,11 @@
-//src/services/authService.js
+﻿//src/services/authService.js
 const User = require('../models/User');
 const jwt = require('jsonwebtoken');
 const { jwtSecret, jwtRefreshSecret, jwtExpiresIn, jwtRefreshExpiresIn, adminMail } = require('../config/env');
 
 const generateTokens = (userId) => {
     if (!jwtSecret || !jwtRefreshSecret) {
-        throw new Error('Erreur de configuration serveur : Cles JWT manquantes');
+        throw new Error('Erreur de configuration serveur : Clés JWT manquantes');
     }
 
     const accessToken = jwt.sign({ id: userId }, jwtSecret, {
@@ -39,8 +39,8 @@ exports.registerUser = async (login, email, password, referredByCode = null) => 
     }
 
     let referredByUser = null;
-    if (referredByCode) {
-        referredByUser = await User.findOne({ referralCode: referredByCode.toUpperCase() });
+    if (referredByCode && typeof referredByCode === 'string' && referredByCode.trim().length > 0) {
+        referredByUser = await User.findOne({ referralCode: referredByCode.trim().toUpperCase() });
         if (!referredByUser) {
             throw new Error('Code de parrainage invalide');
         }
@@ -113,7 +113,7 @@ exports.refreshUserToken = async (currentRefreshToken) => {
         
         const user = await User.findById(decoded.id);
         if (!user || !user.refreshTokens.includes(currentRefreshToken)) {
-            throw new Error('Jeton de rafraichissement invalide ou expire');
+            throw new Error('Jeton de rafraîchissement invalide ou expiré');
         }
 
         const { accessToken, refreshToken: newRefreshToken } = generateTokens(user._id);
@@ -124,7 +124,7 @@ exports.refreshUserToken = async (currentRefreshToken) => {
 
         return { accessToken, refreshToken: newRefreshToken };
     } catch (error) {
-        throw new Error('Session expiree, veuillez vous reconnecter');
+        throw new Error('Session expirée, veuillez vous reconnecter');
     }
 };
 
@@ -136,24 +136,21 @@ exports.logoutUser = async (userId) => {
     }
 };
 
-// --- CONTROLEUR MIS A JOUR : Calcul du rang ---
 exports.getUserProfile = async (userId) => {
     const user = await User.findById(userId);
     if (!user) {
         throw new Error('Utilisateur introuvable');
     }
 
-    // Calcul du rang : On compte le nombre de joueurs (non bannis) ayant un score supérieur
     const higherScoringUsersCount = await User.countDocuments({
         isBanned: false,
         bestScore: { $gt: user.bestScore }
     });
     
-    // Le rang est le nombre de personnes devant lui + 1
     const rank = higherScoringUsersCount + 1;
 
     const userResponse = user.toObject();
-    userResponse.rank = rank; // On injecte le rang dans la reponse
+    userResponse.rank = rank;
     
     delete userResponse.password;
     delete userResponse.refreshTokens;
