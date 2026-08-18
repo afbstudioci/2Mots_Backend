@@ -10,7 +10,7 @@ const normalizeText = (text) => {
 
 const calculateCooldown = () => {
     const minDays = 7;
-    const maxDays = 45;
+    const maxDays = 30;
     const randomDays = Math.floor(Math.random() * (maxDays - minDays + 1)) + minDays;
     const cooldownDate = new Date();
     cooldownDate.setDate(cooldownDate.getDate() + randomDays);
@@ -35,11 +35,10 @@ const shuffleArray = (array) => {
 const enrichPairsWithOptions = async (wordPairs) => {
     const enrichedList = [];
 
-    // Fallbacks par type grammatical pour garantir toujours 3 options de meme nature
     const fallbackByType = {
-        nom: ['Voyage', 'Soleil', 'Miroir', 'Lumiere', 'Secret', 'Echo', 'Flamme', 'Ocean'],
-        verbe: ['Courir', 'Partager', 'Briller', 'Ecouter', 'Construire', 'Voler', 'Creer'],
-        adjectif: ['Rapide', 'Lumineux', 'Solide', 'Silencieux', 'Immense', 'Precieux'],
+        nom: ['Voyage', 'Soleil', 'Miroir', 'Lumière', 'Secret', 'Écho', 'Flamme', 'Océan', 'Plage', 'Lune', 'Étoile'],
+        verbe: ['Courir', 'Partager', 'Briller', 'Écouter', 'Construire', 'Voler', 'Créer', 'Ouvrir', 'Couper'],
+        adjectif: ['Rapide', 'Lumineux', 'Solide', 'Silencieux', 'Immense', 'Précieux', 'Inviolable', 'Éphémère'],
     };
 
     for (const pair of wordPairs) {
@@ -50,7 +49,7 @@ const enrichPairsWithOptions = async (wordPairs) => {
 
         let distractors = [];
 
-        if (rawPair.distractors && rawPair.distractors.length >= 2) {
+        if (rawPair.distractors && Array.isArray(rawPair.distractors) && rawPair.distractors.length >= 2) {
             distractors = rawPair.distractors.slice(0, 2);
         } else {
             const sameTypePairs = await WordPair.find({
@@ -58,7 +57,7 @@ const enrichPairsWithOptions = async (wordPairs) => {
                 expectedType: rawPair.expectedType,
                 isActive: true,
             })
-                .limit(10)
+                .limit(15)
                 .select('exactMatch word1')
                 .lean();
 
@@ -107,7 +106,7 @@ const enrichPairsWithOptions = async (wordPairs) => {
 
 const checkAnswerRealtime = async (userId, wordPairId, userAnswer, timeSpent) => {
     const pair = await WordPair.findById(wordPairId);
-    if (!pair) throw createError('Enigme introuvable', 404);
+    if (!pair) throw createError('Énigme introuvable', 404);
 
     const user = await User.findById(userId);
     if (!user) throw createError('Utilisateur introuvable', 404);
@@ -193,8 +192,11 @@ const checkAnswerRealtime = async (userId, wordPairId, userAnswer, timeSpent) =>
 
     await user.save();
 
+    const officialAnswer = (pair.exactMatch && pair.exactMatch[0]) ? pair.exactMatch[0] : pair.word1;
+
     return {
         isCorrect,
+        correctAnswer: officialAnswer,
         points,
         accuracy,
         timeWon,
@@ -203,7 +205,6 @@ const checkAnswerRealtime = async (userId, wordPairId, userAnswer, timeSpent) =>
         newLevel,
         currentXp,
         xpNeeded: 3 + newLevel * 2,
-        expectedAnswer: isCorrect && pair.exactMatch && pair.exactMatch[0] ? pair.exactMatch[0] : null,
         logicalHint: pair.clue,
     };
 };
@@ -213,23 +214,11 @@ const validateFinalSession = async (userId, answers) => {
     if (!user) throw createError('Utilisateur introuvable', 404);
 
     if (!answers || !Array.isArray(answers)) {
-        throw createError('Format de donnees invalide', 400);
+        throw createError('Format de données invalide', 400);
     }
 
-    let totalTime = 0;
     let totalScore = 0;
     const corrections = [];
-
-    for (const item of answers) {
-        totalTime += item.timeSpent || 0;
-    }
-
-    if (answers.length >= 5 && totalTime < 1) {
-        user.isBanned = true;
-        user.banReason = 'Vitesse anormale detectee';
-        await user.save();
-        throw createError('Tricherie detectee. Compte banni.', 403);
-    }
 
     for (const item of answers) {
         if (!item.wordPairId) continue;
@@ -263,7 +252,7 @@ const validateFinalSession = async (userId, answers) => {
                 word1: pair.word1,
                 word2: pair.word2,
                 expectedAnswer: (pair.exactMatch && pair.exactMatch[0]) || 'Inconnu',
-                userAnswer: item.answer || 'Non repondu',
+                userAnswer: item.answer || 'Non répondu',
             });
         }
 
