@@ -5,7 +5,11 @@ const missionService = require('./missionService');
 
 const normalizeText = (text) => {
     if (!text) return '';
-    return text.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().trim();
+    return text
+        .normalize('NFD')
+        .replace(/[\u0300-\u036f]/g, '')
+        .toLowerCase()
+        .trim();
 };
 
 const calculateCooldown = () => {
@@ -34,12 +38,6 @@ const shuffleArray = (array) => {
 
 const enrichPairsWithOptions = async (wordPairs) => {
     const enrichedList = [];
-
-    const fallbackByType = {
-        nom: ['Voyage', 'Soleil', 'Miroir', 'Lumière', 'Secret', 'Écho', 'Flamme', 'Océan', 'Plage', 'Lune', 'Étoile'],
-        verbe: ['Courir', 'Partager', 'Briller', 'Écouter', 'Construire', 'Voler', 'Créer', 'Ouvrir', 'Couper'],
-        adjectif: ['Rapide', 'Lumineux', 'Solide', 'Silencieux', 'Immense', 'Précieux', 'Inviolable', 'Éphémère'],
-    };
 
     for (const pair of wordPairs) {
         const rawPair = pair.toObject ? pair.toObject() : pair;
@@ -74,13 +72,7 @@ const enrichPairsWithOptions = async (wordPairs) => {
                 const shuffledPool = shuffleArray(uniquePool);
                 distractors = [shuffledPool[0], shuffledPool[1]];
             } else {
-                const typeKey = (rawPair.expectedType || 'nom').toLowerCase();
-                const fallbacks = fallbackByType[typeKey] || fallbackByType.nom;
-                const filteredFallbacks = fallbacks.filter(
-                    (f) => normalizeText(f) !== normalizeText(correctAnswer)
-                );
-                const shuffledFallbacks = shuffleArray(filteredFallbacks);
-                distractors = [shuffledFallbacks[0], shuffledFallbacks[1]];
+                distractors = ['Option A', 'Option B'];
             }
         }
 
@@ -191,7 +183,6 @@ const checkAnswerRealtime = async (userId, wordPairId, userAnswer, timeSpent) =>
     }
 
     await user.save();
-
     const officialAnswer = (pair.exactMatch && pair.exactMatch[0]) ? pair.exactMatch[0] : pair.word1;
 
     return {
@@ -201,12 +192,24 @@ const checkAnswerRealtime = async (userId, wordPairId, userAnswer, timeSpent) =>
         accuracy,
         timeWon,
         earnedKevs,
+        totalKevs: user.kevs,
         leveledUp,
         newLevel,
         currentXp,
         xpNeeded: 3 + newLevel * 2,
         logicalHint: pair.clue,
     };
+};
+
+const useHint = async (userId) => {
+    const user = await User.findById(userId);
+    if (!user) throw createError('Utilisateur introuvable', 404);
+    if (user.kevs < 5) {
+        throw createError('Kevs insuffisants. 5 Kevs requis pour le 50/50.', 400);
+    }
+    user.kevs -= 5;
+    await user.save();
+    return { kevs: user.kevs };
 };
 
 const validateFinalSession = async (userId, answers) => {
@@ -264,12 +267,12 @@ const validateFinalSession = async (userId, answers) => {
     }
 
     await user.save();
-
-    return { totalScore, corrections };
+    return { totalScore, corrections, kevs: user.kevs };
 };
 
 module.exports = {
     enrichPairsWithOptions,
     checkAnswerRealtime,
+    useHint,
     validateFinalSession,
 };

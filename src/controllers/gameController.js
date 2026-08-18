@@ -1,100 +1,90 @@
 ﻿//src/controllers/gameController.js
 const WordPair = require('../models/WordPair');
-const User = require('../models/User');
 const gameService = require('../services/gameService');
 
-exports.getBatch = async (req, res) => {
+const getBatch = async (req, res, next) => {
     try {
-        const user = await User.findById(req.user.id);
-        if (user.isBanned) {
-            return res.status(403).json({ status: 'error', message: 'Compte suspendu.' });
-        }
+        const userId = req.user._id;
+        const playedWordIds = req.user.playedWords
+            .filter(pw => pw.cooldownUntil && new Date() < new Date(pw.cooldownUntil))
+            .map(pw => pw.word);
 
-        const now = new Date();
-        const excludedWordIds = user.playedWords
-            .filter((pw) => pw.cooldownUntil && pw.cooldownUntil > now)
-            .map((pw) => pw.word);
-
-        const maxDifficulty = Math.min(10, user.level);
-        const minDifficulty = Math.max(1, maxDifficulty - 2);
-
-        let words = await WordPair.aggregate([
-            {
-                $match: {
-                    _id: { $nin: excludedWordIds },
-                    isActive: true,
-                    difficulty: { $gte: minDifficulty, $lte: maxDifficulty },
-                },
-            },
-            { $sample: { size: 10 } },
-            { $project: { word1: 1, word2: 1, clue: 1, expectedType: 1, exactMatch: 1, distractors: 1, difficulty: 1 } },
+        const wordPairs = await WordPair.aggregate([
+            { $match: { _id: { $nin: playedWordIds }, isActive: true } },
+            { $sample: { size: 10 } }
         ]);
 
-        if (words.length < 10) {
-            words = await WordPair.aggregate([
-                {
-                    $match: {
-                        _id: { $nin: excludedWordIds },
-                        isActive: true,
-                        difficulty: { $lte: maxDifficulty },
-                    },
-                },
-                { $sample: { size: 10 } },
-                { $project: { word1: 1, word2: 1, clue: 1, expectedType: 1, exactMatch: 1, distractors: 1, difficulty: 1 } },
-            ]);
+        if (!wordPairs || wordPairs.length === 0) {
+            return res.status(200).json({
+                status: 'success',
+                data: [],
+                userStats: {
+                    level: req.user.level,
+                    xp: req.user.xp,
+                    xpNeeded: 3 + req.user.level * 2,
+                    kevs: req.user.kevs
+                }
+            });
         }
 
-        if (words.length < 10) {
-            words = await WordPair.aggregate([
-                { $match: { isActive: true } },
-                { $sample: { size: 10 } },
-                { $project: { word1: 1, word2: 1, clue: 1, expectedType: 1, exactMatch: 1, distractors: 1, difficulty: 1 } },
-            ]);
-        }
-
-        // Enrichissement avec 3 options de meme categorie grammaticale
-        const enrichedBatch = await gameService.enrichPairsWithOptions(words);
+        const enrichedPairs = await gameService.enrichPairsWithOptions(wordPairs);
 
         res.status(200).json({
             status: 'success',
-            data: enrichedBatch,
+            data: enrichedPairs,
             userStats: {
-                level: user.level,
-                xp: user.xp,
-                xpNeeded: 3 + user.level * 2,
-            },
+                level: req.user.level,
+                xp: req.user.xp,
+                xpNeeded: 3 + req.user.level * 2,
+                kevs: req.user.kevs
+            }
         });
     } catch (error) {
-        res.status(500).json({ status: 'error', message: error.message });
+        next(error);
     }
 };
 
-exports.checkAnswer = async (req, res) => {
+const checkAnswer = async (req, res, next) => {
     try {
         const { wordPairId, answer, timeSpent } = req.body;
-        const userId = req.user.id;
-
-        if (!wordPairId || answer === undefined || timeSpent === undefined) {
-            return res.status(400).json({ status: 'error', message: 'Donnees manquantes' });
-        }
-
-        const result = await gameService.checkAnswerRealtime(userId, wordPairId, answer, timeSpent);
-        res.status(200).json({ status: 'success', data: result });
+        const result = await gameService.checkAnswerRealtime(req.user._id, wordPairId, answer, timeSpent);
+        res.status(200).json({
+            status: 'success',
+            data: result
+        });
     } catch (error) {
-        res.status(500).json({ status: 'error', message: error.message });
+        next(error);
     }
 };
 
-exports.validateSession = async (req, res) => {
+const useHint = async (req, res, next) => {
+    try {
+        const result = await gameService.useHint(req.user._id);
+        res.status(200).json({
+            status: 'success',
+            data: result
+        });
+    } catch (error) {
+        next(error);
+    }
+};
+
+const validateSession = async (req, res, next) => {
     try {
         const { answers } = req.body;
-        const userId = req.user.id;
-        const result = await gameService.validateFinalSession(userId, answers);
-        res.status(200).json({ status: 'success', data: result });
+        const result = await gameService.validateFinalSession(req.user._id, answers);
+        res.status(200).json({
+            status: 'success',
+            data: result
+        });
     } catch (error) {
-        if (error.message.includes('Tricherie')) {
-            return res.status(403).json({ status: 'error', message: error.message });
-        }
-        res.status(500).json({ status: 'error', message: error.message });
+        next(error);
     }
+};
+
+module.exports = {
+    getBatch,
+    checkAnswer,
+    useHint,
+    validateSession
 };
