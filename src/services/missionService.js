@@ -1,125 +1,102 @@
-//src/services/missionService.js
+﻿//src/services/missionService.js
 const Mission = require('../models/Mission');
 const UserMission = require('../models/UserMission');
 const User = require('../models/User');
 
-/**
- * Récupère les missions d'un utilisateur, en génère si besoin pour la journée
- */
+const DEFAULT_MISSIONS = [
+  { title: "Maitre des Mots", desc: "Trouvez 5 enigmes avec succes", reward: 5, targetValue: 5, targetType: "words_solved", isActive: true },
+  { title: "Progression Constante", desc: "Montez de 1 niveau", reward: 10, targetValue: 1, targetType: "levels_reached", isActive: true },
+  { title: "Reflexion Eclair", desc: "Trouvez 3 enigmes en moins de 5 secondes", reward: 8, targetValue: 3, targetType: "fast_answers", isActive: true },
+  { title: "Champion Quotidien", desc: "Trouvez 10 enigmes", reward: 15, targetValue: 10, targetType: "words_solved", isActive: true }
+];
+
+const seedMissionsIfEmpty = async () => {
+  try {
+    const count = await Mission.countDocuments();
+    if (count === 0) {
+      await Mission.insertMany(DEFAULT_MISSIONS);
+    }
+  } catch (e) {}
+};
+
+exports.ensureUserMissions = async (userId) => {
+  try {
+    await seedMissionsIfEmpty();
+    const existing = await UserMission.find({ user: userId });
+
+    if (!existing || existing.length < 3) {
+      const missionsPool = await Mission.find({ isActive: true });
+      if (!missionsPool || missionsPool.length === 0) return;
+
+      const shuffled = [...missionsPool].sort(() => 0.5 - Math.random());
+      const selected = shuffled.slice(0, 3);
+
+      for (const m of selected) {
+        await UserMission.findOneAndUpdate(
+          { user: userId, mission: m._id },
+          { $setOnInsert: { user: userId, mission: m._id, progress: 0, completed: false, claimed: false } },
+          { upsert: true, new: true }
+        );
+      }
+    }
+  } catch (e) {
+    console.warn('[MISSIONS] ensureUserMissions warn:', e.message);
+  }
+};
+
 exports.getUserMissions = async (userId) => {
-    // 1. S'assurer que l'utilisateur a des missions pour aujourd'hui
+  try {
     await this.ensureUserMissions(userId);
 
-    // 2. Récupérer les missions actives pour l'utilisateur
-    // On considère comme "récentes" les missions créées ou mises à jour aujourd'hui
-    const startOfDay = new Date();
-    startOfDay.setHours(0,0,0,0);
-
-    const userMissions = await UserMission.find({ 
-        user: userId,
-        createdAt: { $gte: startOfDay }
-    }).populate('mission');
-    
-    // Filtrer les missions orphelines (si la mission a été supprimée de la collection Mission)
+    const userMissions = await UserMission.find({ user: userId }).populate('mission');
     return userMissions
-        .filter(um => um.mission)
-        .map(um => ({
-            id: um.mission._id,
-            userMissionId: um._id,
-            title: um.mission.title,
-            desc: um.mission.desc,
-            reward: um.mission.reward,
-            type: um.mission.type,
-            targetValue: um.mission.targetValue,
-            targetAction: um.mission.targetAction,
-            progress: um.progress,
-            completed: um.completed,
-            claimed: um.claimed
-        }));
+      .filter((um) => um.mission)
+      .map((um) => ({
+        id: um.mission._id,
+        userMissionId: um._id,
+        title: um.mission.title,
+        desc: um.mission.desc,
+        reward: um.mission.reward,
+        type: um.mission.targetType || um.mission.type,
+        targetValue: um.mission.targetValue,
+        progress: um.progress,
+        completed: um.completed,
+        claimed: um.claimed,
+      }));
+  } catch (e) {
+    console.warn('[MISSIONS] getUserMissions warn:', e.message);
+    return [];
+  }
 };
 
-/**
- * Assure qu'un utilisateur a 3 missions pour la journée
- */
-exports.ensureUserMissions = async (userId) => {
-    const startOfDay = new Date();
-    startOfDay.setHours(0,0,0,0);
-
-    const count = await UserMission.countDocuments({ 
-        user: userId, 
-        createdAt: { $gte: startOfDay } 
-    });
-
-    if (count === 0) {
-        // Sélectionner 3 missions aléatoires dans le pool global
-        const missionsPool = await Mission.find({ isActive: true });
-        if (missionsPool.length === 0) return;
-
-        // Mélanger et prendre 3
-        const shuffled = missionsPool.sort(() => 0.5 - Math.random());
-        const selected = shuffled.slice(0, 3);
-
-        const newUserMissions = selected.map(m => ({
-            user: userId,
-            mission: m._id,
-            progress: 0,
-            completed: false,
-            claimed: false
-        }));
-
-        await UserMission.insertMany(newUserMissions);
-    }
-};
-
-/**
- * Met à jour la progression d'une mission d'un certain type
- */
 exports.updateMissionProgress = async (userId, targetType, increment = 1) => {
-    const startOfDay = new Date();
-    startOfDay.setHours(0,0,0,0);
-
-    const userMissions = await UserMission.find({ 
-        user: userId, 
-        completed: false,
-        createdAt: { $gte: startOfDay } 
-    }).populate('mission');
-
+  try {
+    const userMissions = await UserMission.find({ user: userId, completed: false }).populate('mission');
     for (const um of userMissions) {
-        if (um.mission && um.mission.targetType === targetType) {
-            um.progress += increment;
-            if (um.progress >= um.mission.targetValue) {
-                um.progress = um.mission.targetValue;
-                um.completed = true;
-            }
-            await um.save();
+      if (um.mission && (um.mission.targetType === targetType || um.mission.type === targetType)) {
+        um.progress += increment;
+        if (um.progress >= um.mission.targetValue) {
+          um.progress = um.mission.targetValue;
+          um.completed = true;
         }
+        await um.save();
+      }
     }
+  } catch (e) {}
 };
 
-/**
- * Réclame la récompense
- */
 exports.claimMissionReward = async (userId, missionId) => {
-    const updatedMission = await UserMission.findOneAndUpdate(
-        { 
-            user: userId, 
-            mission: missionId,
-            completed: true,
-            claimed: false
-        },
-        { $set: { claimed: true } },
-        { new: true }
-    ).populate('mission');
+  const updatedMission = await UserMission.findOneAndUpdate(
+    { user: userId, mission: missionId, completed: true, claimed: false },
+    { $set: { claimed: true } },
+    { new: true }
+  ).populate('mission');
 
-    if (!updatedMission) {
-        throw new Error("Mission non complétée, déjà réclamée ou inexistante");
-    }
+  if (!updatedMission) {
+    throw new Error('Mission non complétée, déjà réclamée ou inexistante');
+  }
 
-    const user = await User.findByIdAndUpdate(
-        userId,
-        { $inc: { kevs: updatedMission.mission.reward } },
-        { new: true }
-    );
-
-    return { newKevs: user.kevs };
+  const reward = (updatedMission.mission && updatedMission.mission.reward) || 5;
+  const user = await User.findByIdAndUpdate(userId, { $inc: { kevs: reward } }, { new: true });
+  return { newKevs: user?.kevs || 0 };
 };
