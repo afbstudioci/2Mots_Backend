@@ -4,15 +4,21 @@ const gameService = require('../services/gameService');
 
 const getBatch = async (req, res, next) => {
     try {
-        const userId = req.user._id;
-        const playedWordIds = req.user.playedWords
+        const playedWordIds = (req.user.playedWords || [])
             .filter(pw => pw.cooldownUntil && new Date() < new Date(pw.cooldownUntil))
             .map(pw => pw.word);
 
-        const wordPairs = await WordPair.aggregate([
+        let wordPairs = await WordPair.aggregate([
             { $match: { _id: { $nin: playedWordIds }, isActive: true } },
             { $sample: { size: 10 } }
         ]);
+
+        if (!wordPairs || wordPairs.length === 0) {
+            wordPairs = await WordPair.aggregate([
+                { $match: { isActive: true } },
+                { $sample: { size: 10 } }
+            ]);
+        }
 
         if (!wordPairs || wordPairs.length === 0) {
             return res.status(200).json({

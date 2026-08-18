@@ -38,9 +38,9 @@ const shuffleArray = (array) => {
 
 const enrichPairsWithOptions = async (wordPairs) => {
     const enrichedList = [];
+    const usedDistractorsInBatch = new Set();
 
-    for (const pair of wordPairs) {
-        const rawPair = pair.toObject ? pair.toObject() : pair;
+    for (const rawPair of wordPairs) {
         const correctAnswer = (rawPair.exactMatch && rawPair.exactMatch.length > 0)
             ? rawPair.exactMatch[0]
             : rawPair.word1;
@@ -48,31 +48,61 @@ const enrichPairsWithOptions = async (wordPairs) => {
         let distractors = [];
 
         if (rawPair.distractors && Array.isArray(rawPair.distractors) && rawPair.distractors.length >= 2) {
-            distractors = rawPair.distractors.slice(0, 2);
-        } else {
-            const sameTypePairs = await WordPair.find({
-                _id: { $ne: rawPair._id },
-                expectedType: rawPair.expectedType,
-                isActive: true,
-            })
-                .limit(15)
-                .select('exactMatch word1')
-                .lean();
+            const valid = rawPair.distractors.filter(d => 
+                d && normalizeText(d) !== normalizeText(correctAnswer) &&
+                normalizeText(d) !== normalizeText(rawPair.word1) &&
+                normalizeText(d) !== normalizeText(rawPair.word2)
+            );
+            if (valid.length >= 2) {
+                distractors = valid.slice(0, 2);
+            }
+        }
+
+        if (distractors.length < 2) {
+            const samplePairs = await WordPair.aggregate([
+                {
+                    $match: {
+                        _id: { $ne: rawPair._id },
+                        expectedType: rawPair.expectedType,
+                        isActive: true,
+                    }
+                },
+                { $sample: { size: 30 } }
+            ]);
 
             const pool = [];
-            sameTypePairs.forEach((p) => {
-                const val = (p.exactMatch && p.exactMatch[0]) || p.word1;
-                if (val && normalizeText(val) !== normalizeText(correctAnswer)) {
-                    pool.push(val);
+            for (const p of samplePairs) {
+                const candidates = [
+                    ...(p.exactMatch || []),
+                    ...(p.distractors || []),
+                    p.word1
+                ];
+                for (const c of candidates) {
+                    const norm = normalizeText(c);
+                    if (
+                        norm &&
+                        norm !== normalizeText(correctAnswer) &&
+                        norm !== normalizeText(rawPair.word1) &&
+                        norm !== normalizeText(rawPair.word2) &&
+                        !usedDistractorsInBatch.has(norm)
+                    ) {
+                        pool.push(c);
+                        usedDistractorsInBatch.add(norm);
+                    }
                 }
-            });
+            }
 
             const uniquePool = Array.from(new Set(pool));
             if (uniquePool.length >= 2) {
-                const shuffledPool = shuffleArray(uniquePool);
-                distractors = [shuffledPool[0], shuffledPool[1]];
+                const shuffled = shuffleArray(uniquePool);
+                distractors = [shuffled[0], shuffled[1]];
             } else {
-                distractors = ['Option A', 'Option B'];
+                const fallbackVerbs = ['trancher', 'ajuster', 'assembler', 'dessiner', 'sculpter', 'peser', 'mesurer', 'lier', 'fixer', 'guider'];
+                const fallbackNouns = ['matiere', 'energie', 'surface', 'volume', 'contour', 'element', 'origine', 'alliage', 'reflet', 'signal'];
+                const fallbackAdj = ['robuste', 'precis', 'lumineux', 'profond', 'naturel', 'compact', 'dense', 'fluide', 'stable', 'vif'];
+                const poolChoice = rawPair.expectedType === 'verbe' ? fallbackVerbs : (rawPair.expectedType === 'adjectif' ? fallbackAdj : fallbackNouns);
+                const shuffledFallbacks = shuffleArray(poolChoice.filter(w => normalizeText(w) !== normalizeText(correctAnswer)));
+                distractors = [shuffledFallbacks[0] || 'Option 1', shuffledFallbacks[1] || 'Option 2'];
             }
         }
 
@@ -98,7 +128,7 @@ const enrichPairsWithOptions = async (wordPairs) => {
 
 const checkAnswerRealtime = async (userId, wordPairId, userAnswer, timeSpent) => {
     const pair = await WordPair.findById(wordPairId);
-    if (!pair) throw createError('Énigme introuvable', 404);
+    if (!pair) throw createError('Enigme introuvable', 404);
 
     const user = await User.findById(userId);
     if (!user) throw createError('Utilisateur introuvable', 404);
@@ -217,7 +247,7 @@ const validateFinalSession = async (userId, answers) => {
     if (!user) throw createError('Utilisateur introuvable', 404);
 
     if (!answers || !Array.isArray(answers)) {
-        throw createError('Format de données invalide', 400);
+        throw createError('Format de donnees invalide', 400);
     }
 
     let totalScore = 0;
@@ -255,7 +285,7 @@ const validateFinalSession = async (userId, answers) => {
                 word1: pair.word1,
                 word2: pair.word2,
                 expectedAnswer: (pair.exactMatch && pair.exactMatch[0]) || 'Inconnu',
-                userAnswer: item.answer || 'Non répondu',
+                userAnswer: item.answer || 'Non repondu',
             });
         }
 
