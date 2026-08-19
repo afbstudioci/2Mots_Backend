@@ -3,113 +3,54 @@ const WordPair = require('../models/WordPair');
 const User = require('../models/User');
 const missionService = require('./missionService');
 
-const normalizeText = (text) => {
-    if (!text) return '';
-    return text
-        .normalize('NFD')
-        .replace(/[\u0300-\u036f]/g, '')
-        .toLowerCase()
-        .trim();
-};
-
-const calculateCooldown = () => {
-    const minDays = 7;
-    const maxDays = 30;
-    const randomDays = Math.floor(Math.random() * (maxDays - minDays + 1)) + minDays;
-    const cooldownDate = new Date();
-    cooldownDate.setDate(cooldownDate.getDate() + randomDays);
-    return cooldownDate;
-};
-
-const createError = (message, statusCode) => {
+const createError = (message, statusCode = 400) => {
     const error = new Error(message);
     error.statusCode = statusCode;
     return error;
 };
 
+const calculateCooldown = () => {
+    return new Date(Date.now() + 2 * 60 * 60 * 1000);
+};
+
+const normalizeText = (text) => {
+    if (!text) return '';
+    return text.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().trim();
+};
+
 const shuffleArray = (array) => {
-    const shuffled = [...array];
-    for (let i = shuffled.length - 1; i > 0; i--) {
+    const arr = [...array];
+    for (let i = arr.length - 1; i > 0; i--) {
         const j = Math.floor(Math.random() * (i + 1));
-        [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
+        [arr[i], arr[j]] = [arr[j], arr[i]];
     }
-    return shuffled;
+    return arr;
 };
 
 const enrichPairsWithOptions = async (wordPairs) => {
     const enrichedList = [];
-    const usedDistractorsInBatch = new Set();
 
     for (const rawPair of wordPairs) {
-        const correctAnswer = (rawPair.exactMatch && rawPair.exactMatch.length > 0)
-            ? rawPair.exactMatch[0]
-            : rawPair.word1;
-
+        const correctAnswer = (rawPair.exactMatch && rawPair.exactMatch[0]) || rawPair.word1;
         let distractors = [];
 
         if (rawPair.distractors && Array.isArray(rawPair.distractors) && rawPair.distractors.length >= 2) {
-            const valid = rawPair.distractors.filter(d => 
-                d && normalizeText(d) !== normalizeText(correctAnswer) &&
-                normalizeText(d) !== normalizeText(rawPair.word1) &&
-                normalizeText(d) !== normalizeText(rawPair.word2)
-            );
-            if (valid.length >= 2) {
-                distractors = valid.slice(0, 2);
-            }
+            distractors = [rawPair.distractors[0], rawPair.distractors[1]];
+        } else {
+            const fallbackVerbs = ['trancher', 'ajuster', 'assembler', 'dessiner', 'sculpter', 'peser', 'mesurer', 'lier', 'fixer', 'guider'];
+            const fallbackNouns = ['matiere', 'energie', 'surface', 'volume', 'contour', 'element', 'origine', 'alliage', 'reflet', 'signal'];
+            const fallbackAdj = ['robuste', 'precis', 'lumineux', 'profond', 'naturel', 'compact', 'dense', 'fluide', 'stable', 'vif'];
+            const poolChoice = rawPair.expectedType === 'verbe' ? fallbackVerbs : (rawPair.expectedType === 'adjectif' ? fallbackAdj : fallbackNouns);
+            const filtered = poolChoice.filter(w => normalizeText(w) !== normalizeText(correctAnswer));
+            const shuffledFallbacks = shuffleArray(filtered);
+            distractors = [shuffledFallbacks[0] || 'Option A', shuffledFallbacks[1] || 'Option B'];
         }
 
-        if (distractors.length < 2) {
-            const samplePairs = await WordPair.aggregate([
-                {
-                    $match: {
-                        _id: { $ne: rawPair._id },
-                        expectedType: rawPair.expectedType,
-                        isActive: true,
-                    }
-                },
-                { $sample: { size: 30 } }
-            ]);
-
-            const pool = [];
-            for (const p of samplePairs) {
-                const candidates = [
-                    ...(p.exactMatch || []),
-                    ...(p.distractors || []),
-                    p.word1
-                ];
-                for (const c of candidates) {
-                    const norm = normalizeText(c);
-                    if (
-                        norm &&
-                        norm !== normalizeText(correctAnswer) &&
-                        norm !== normalizeText(rawPair.word1) &&
-                        norm !== normalizeText(rawPair.word2) &&
-                        !usedDistractorsInBatch.has(norm)
-                    ) {
-                        pool.push(c);
-                        usedDistractorsInBatch.add(norm);
-                    }
-                }
-            }
-
-            const uniquePool = Array.from(new Set(pool));
-            if (uniquePool.length >= 2) {
-                const shuffled = shuffleArray(uniquePool);
-                distractors = [shuffled[0], shuffled[1]];
-            } else {
-                const fallbackVerbs = ['trancher', 'ajuster', 'assembler', 'dessiner', 'sculpter', 'peser', 'mesurer', 'lier', 'fixer', 'guider'];
-                const fallbackNouns = ['matiere', 'energie', 'surface', 'volume', 'contour', 'element', 'origine', 'alliage', 'reflet', 'signal'];
-                const fallbackAdj = ['robuste', 'precis', 'lumineux', 'profond', 'naturel', 'compact', 'dense', 'fluide', 'stable', 'vif'];
-                const poolChoice = rawPair.expectedType === 'verbe' ? fallbackVerbs : (rawPair.expectedType === 'adjectif' ? fallbackAdj : fallbackNouns);
-                const shuffledFallbacks = shuffleArray(poolChoice.filter(w => normalizeText(w) !== normalizeText(correctAnswer)));
-                distractors = [shuffledFallbacks[0] || 'Option 1', shuffledFallbacks[1] || 'Option 2'];
-            }
-        }
-
+        // GARANTIR UN MÉLANGE ALÉATOIRE ABSOLU DES 3 OPTIONS
         const formattedOptions = shuffleArray([
             correctAnswer,
             distractors[0],
-            distractors[1],
+            distractors[1]
         ]);
 
         enrichedList.push({
@@ -119,7 +60,8 @@ const enrichPairsWithOptions = async (wordPairs) => {
             clue: rawPair.clue,
             expectedType: rawPair.expectedType,
             difficulty: rawPair.difficulty,
-            options: formattedOptions,
+            exactMatch: rawPair.exactMatch || [correctAnswer],
+            options: formattedOptions
         });
     }
 
@@ -132,17 +74,6 @@ const checkAnswerRealtime = async (userId, wordPairId, userAnswer, timeSpent) =>
 
     const user = await User.findById(userId);
     if (!user) throw createError('Utilisateur introuvable', 404);
-
-    const existingPlayedWord = user.playedWords.find(
-        (pw) => pw.word && pw.word.toString() === pair._id.toString()
-    );
-
-    if (!existingPlayedWord) {
-        user.playedWords.push({
-            word: pair._id,
-            cooldownUntil: calculateCooldown(),
-        });
-    }
 
     const normalizedAnswer = normalizeText(userAnswer);
     let isCorrect = false;
@@ -175,7 +106,7 @@ const checkAnswerRealtime = async (userId, wordPairId, userAnswer, timeSpent) =>
     if (isCorrect) {
         await missionService.updateMissionProgress(userId, 'words_solved');
         earnedKevs = 1;
-        user.kevs += earnedKevs;
+        user.kevs = (user.kevs || 0) + earnedKevs;
         user.xp += 1;
         currentXp = user.xp;
 
@@ -190,26 +121,9 @@ const checkAnswerRealtime = async (userId, wordPairId, userAnswer, timeSpent) =>
             user.kevs += 5;
 
             await missionService.updateMissionProgress(userId, 'levels_reached');
-
-            if (newLevel === 2 && user.referredBy && !user.referralRewardClaimed) {
-                user.kevs += 100;
-                user.referralRewardClaimed = true;
-                const referrer = await User.findById(user.referredBy);
-                if (referrer) {
-                    referrer.kevs += 500;
-                    await referrer.save();
-                }
-            }
         }
 
-        if (timeSpent <= 5) {
-            timeWon = 10;
-            points = Math.floor(points * 1.5);
-        } else if (timeSpent <= 15) {
-            timeWon = 6;
-        } else {
-            timeWon = 3;
-        }
+        timeWon = timeSpent <= 5 ? 8 : (timeSpent <= 15 ? 5 : 3);
     }
 
     await user.save();
@@ -227,7 +141,7 @@ const checkAnswerRealtime = async (userId, wordPairId, userAnswer, timeSpent) =>
         newLevel,
         currentXp,
         xpNeeded: 3 + newLevel * 2,
-        logicalHint: pair.clue,
+        logicalHint: pair.clue
     };
 };
 
@@ -245,10 +159,7 @@ const useHint = async (userId) => {
 const validateFinalSession = async (userId, answers) => {
     const user = await User.findById(userId);
     if (!user) throw createError('Utilisateur introuvable', 404);
-
-    if (!answers || !Array.isArray(answers)) {
-        throw createError('Format de donnees invalide', 400);
-    }
+    if (!answers || !Array.isArray(answers)) throw createError('Format invalide', 400);
 
     let totalScore = 0;
     const corrections = [];
@@ -259,40 +170,21 @@ const validateFinalSession = async (userId, answers) => {
         if (!pair) continue;
 
         const userAnswer = normalizeText(item.answer);
-        let points = 0;
-        let isCorrect = false;
+        const checkArray = (arr) => arr && Array.isArray(arr) ? arr.map(normalizeText).includes(userAnswer) : false;
 
-        const checkArray = (arr) =>
-            arr && Array.isArray(arr) ? arr.map(normalizeText).includes(userAnswer) : false;
-
-        if (checkArray(pair.exactMatch)) {
-            points = 10;
-            isCorrect = true;
-        } else if (checkArray(pair.closeMatch)) {
-            points = 8;
-            isCorrect = true;
-        } else if (checkArray(pair.partialMatch)) {
-            points = 5;
-            isCorrect = true;
-        }
-
-        if (isCorrect && item.timeSpent <= 5) {
-            points = Math.floor(points * 1.5);
-        }
-
-        if (!isCorrect) {
+        const isCorrect = checkArray(pair.exactMatch);
+        if (isCorrect) totalScore += 10;
+        else {
             corrections.push({
                 word1: pair.word1,
                 word2: pair.word2,
                 expectedAnswer: (pair.exactMatch && pair.exactMatch[0]) || 'Inconnu',
-                userAnswer: item.answer || 'Non repondu',
+                userAnswer: item.answer || 'Non repondu'
             });
         }
-
-        totalScore += points;
     }
 
-    if (totalScore > user.bestScore) {
+    if (totalScore > (user.bestScore || 0)) {
         user.bestScore = totalScore;
     }
 
@@ -305,45 +197,25 @@ const syncOfflineSession = async (userId, sessionData) => {
     if (!user) throw createError('Utilisateur introuvable', 404);
 
     const { rounds } = sessionData;
-    if (!rounds || !Array.isArray(rounds)) {
-        throw createError('Session invalide', 400);
-    }
+    if (!rounds || !Array.isArray(rounds)) throw createError('Session invalide', 400);
 
     let calculatedScore = 0;
     let earnedKevs = 0;
-    let correctCount = 0;
 
     for (const r of rounds) {
         if (r.isCorrect) {
-            if (r.timeSpentMs && r.timeSpentMs < 400) continue; // Anti-speedhack
-            calculatedScore += 100;
+            calculatedScore += 10;
             earnedKevs += 1;
-            correctCount += 1;
         }
     }
 
-    user.kevs += earnedKevs;
-    user.xp += correctCount;
-
-    const enigmasNeeded = 3 + user.level * 2;
-    while (user.xp >= enigmasNeeded) {
-        user.level += 1;
-        user.xp -= enigmasNeeded;
-        user.kevs += 5;
-    }
-
-    if (calculatedScore > user.bestScore) {
+    user.kevs = (user.kevs || 0) + earnedKevs;
+    if (calculatedScore > (user.bestScore || 0)) {
         user.bestScore = calculatedScore;
     }
 
     await user.save();
-    return {
-        synced: true,
-        earnedKevs,
-        totalKevs: user.kevs,
-        newLevel: user.level,
-        currentXp: user.xp,
-    };
+    return { synced: true, earnedKevs, totalKevs: user.kevs };
 };
 
 module.exports = {
@@ -351,5 +223,5 @@ module.exports = {
     checkAnswerRealtime,
     useHint,
     validateFinalSession,
-    syncOfflineSession,
+    syncOfflineSession
 };

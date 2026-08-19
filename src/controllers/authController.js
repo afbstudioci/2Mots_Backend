@@ -18,7 +18,6 @@ const sendTokenResponse = (res, statusCode, result) => {
 exports.register = async (req, res) => {
     try {
         const validatedData = await registerSchema.parseAsync(req.body);
-
         const { login, email, password } = validatedData;
         const referralCode = (req.body.referralCode && typeof req.body.referralCode === 'string') 
             ? req.body.referralCode.trim() 
@@ -37,7 +36,6 @@ exports.register = async (req, res) => {
 exports.login = async (req, res) => {
     try {
         const validatedData = await loginSchema.parseAsync(req.body);
-
         const { login, password } = validatedData;
         const result = await authService.loginUser(login, password);
         return sendTokenResponse(res, 200, result);
@@ -50,16 +48,26 @@ exports.login = async (req, res) => {
     }
 };
 
+exports.googleAuth = async (req, res) => {
+    try {
+        const { email, name, profilePicture, mode } = req.body;
+        if (!email) {
+            return res.status(400).json({ status: 'fail', message: 'Email requis pour Google Sign-In.' });
+        }
+        const result = await authService.loginWithGoogle({ email, name, profilePicture, mode });
+        return sendTokenResponse(res, 200, result);
+    } catch (error) {
+        return res.status(400).json({ status: 'fail', message: error.message });
+    }
+};
+
 exports.refreshToken = async (req, res) => {
     try {
         const { refreshToken: currentRefreshToken } = req.body;
-
         if (!currentRefreshToken) {
-            return res.status(401).json({ status: 'fail', message: 'Aucun jeton de rafraîchissement fourni.' });
+            return res.status(401).json({ status: 'fail', message: 'Aucun jeton de rafrachissement fourni.' });
         }
-
         const result = await authService.refreshUserToken(currentRefreshToken);
-
         return res.status(200).json({
             status: 'success',
             data: {
@@ -75,9 +83,9 @@ exports.refreshToken = async (req, res) => {
 exports.logout = async (req, res) => {
     try {
         await authService.logoutUser(req.user.id);
-        return res.status(200).json({ status: 'success', message: 'Déconnexion réussie.' });
+        return res.status(200).json({ status: 'success', message: 'Dconnexion russie.' });
     } catch (error) {
-        return res.status(500).json({ status: 'error', message: 'Erreur lors de la déconnexion.' });
+        return res.status(500).json({ status: 'error', message: 'Erreur lors de la dconnexion.' });
     }
 };
 
@@ -111,7 +119,6 @@ exports.updateProfile = async (req, res) => {
                 );
                 stream.end(req.file.buffer);
             });
-
             avatarUrl = uploadResult.secure_url;
         }
 
@@ -123,7 +130,7 @@ exports.updateProfile = async (req, res) => {
             avatarUrl
         });
 
-        return res.status(200).json({ status: 'success', message: 'Profil mis à jour avec succès.', data: { user: updatedUser } });
+        return res.status(200).json({ status: 'success', message: 'Profil mis  jour avec succs.', data: { user: updatedUser } });
     } catch (error) {
         return res.status(400).json({ status: 'fail', message: error.message });
     }
@@ -133,26 +140,12 @@ exports.forgotPassword = async (req, res) => {
     try {
         const { email } = req.body;
         const resetToken = await authService.requestPasswordReset(email);
-
         if (!resetToken) {
-            return res.status(200).json({ status: 'success', message: 'Si cette adresse e-mail existe, un lien a été envoyé.' });
+            return res.status(200).json({ status: 'success', message: 'Si cette adresse e-mail existe, un lien a t envoy.' });
         }
-
-        return res.status(200).json({ status: 'success', message: 'Jeton de réinitialisation généré.', data: { resetToken } });
+        return res.status(200).json({ status: 'success', message: 'Jeton de rinitialisation gnr.', data: { resetToken } });
     } catch (error) {
-        return res.status(500).json({ status: 'error', message: 'Erreur lors de la demande de réinitialisation.' });
-    }
-};
-exports.googleAuth = async (req, res) => {
-    try {
-        const { email, name, profilePicture } = req.body;
-        if (!email) {
-            return res.status(400).json({ status: 'fail', message: 'Email requis pour Google Sign-In.' });
-        }
-        const result = await authService.loginWithGoogle({ email, name, profilePicture });
-        return sendTokenResponse(res, 200, result);
-    } catch (error) {
-        return res.status(401).json({ status: 'fail', message: error.message });
+        return res.status(500).json({ status: 'error', message: 'Erreur lors de la demande de rinitialisation.' });
     }
 };
 
@@ -163,7 +156,7 @@ exports.updateFcmToken = async (req, res) => {
         if (fcmToken && req.user?.id) {
             await User.findByIdAndUpdate(req.user.id, { fcmToken });
         }
-        return res.status(200).json({ status: 'success', message: 'Token FCM synchronisé.' });
+        return res.status(200).json({ status: 'success', message: 'Token FCM synchronis.' });
     } catch (error) {
         return res.status(400).json({ status: 'fail', message: error.message });
     }

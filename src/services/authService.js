@@ -1,11 +1,16 @@
 ﻿//src/services/authService.js
-const User = require('../models/User');
 const jwt = require('jsonwebtoken');
-const { jwtSecret, jwtRefreshSecret, jwtExpiresIn, jwtRefreshExpiresIn, adminMail } = require('../config/env');
+const User = require('../models/User');
+
+const jwtSecret = process.env.JWT_SECRET;
+const jwtRefreshSecret = process.env.JWT_REFRESH_SECRET;
+const jwtExpiresIn = process.env.JWT_EXPIRES_IN || '15m';
+const jwtRefreshExpiresIn = process.env.JWT_REFRESH_EXPIRES_IN || '7d';
+const adminMail = process.env.ADMIN_MAIL;
 
 const generateTokens = (userId) => {
     if (!jwtSecret || !jwtRefreshSecret) {
-        throw new Error('Erreur de configuration serveur : Clés JWT manquantes');
+        throw new Error('Les cls secrtes JWT ne sont pas dfinies sur le serveur.');
     }
 
     const accessToken = jwt.sign({ id: userId }, jwtSecret, {
@@ -23,7 +28,6 @@ exports.registerUser = async (login, email, password, referredByCode = null) => 
     const normalizedEmail = email.toLowerCase().trim();
     const normalizedLogin = login.trim();
 
-    // Recherche insensible à la casse pour l'email et le pseudo
     const existingUser = await User.findOne({ 
         $or: [
             { email: normalizedEmail }, 
@@ -33,9 +37,9 @@ exports.registerUser = async (login, email, password, referredByCode = null) => 
 
     if (existingUser) {
         if (existingUser.email === normalizedEmail) {
-            throw new Error('Cet email est déjà utilisé');
+            throw new Error('Cet email est dj utilis');
         }
-        throw new Error('Ce pseudo est déjà pris');
+        throw new Error('Ce pseudo est dj pris');
     }
 
     let referredByUser = null;
@@ -105,6 +109,60 @@ exports.loginUser = async (loginIdentifier, password) => {
     return { user: userResponse, accessToken, refreshToken };
 };
 
+exports.loginWithGoogle = async ({ email, name, profilePicture, mode = 'login' }) => {
+    if (!email) throw new Error('Email Google manquant');
+    const normalizedEmail = email.toLowerCase().trim();
+
+    let user = await User.findOne({ email: normalizedEmail });
+
+    // Mode connexion : si aucun compte n'existe avec ce Gmail, informer intelligemment l'utilisateur
+    if (!user && mode === 'login') {
+        throw new Error('Aucun compte 2Mots associé à ce Gmail, veuillez vous inscrire.');
+    }
+
+    // Mode inscription : créer le compte s'il n'existe pas encore
+    if (!user) {
+        let baseLogin = (name || normalizedEmail.split('@')[0])
+            .replace(/[^a-zA-Z0-9_]/g, '')
+            .substring(0, 14);
+        if (!baseLogin) baseLogin = 'Joueur';
+
+        let uniqueLogin = baseLogin;
+        let counter = 1;
+        while (await User.findOne({ login: { $regex: new RegExp(`^${uniqueLogin}$`, 'i') } })) {
+            uniqueLogin = `${baseLogin}${counter}`;
+            counter++;
+        }
+
+        const defaultAvatar = profilePicture || `https://ui-avatars.com/api/?name=${encodeURIComponent(uniqueLogin)}&background=FF5A5F&color=fff&size=128`;
+        const randomPassword = Math.random().toString(36).slice(-10) + 'A1!';
+
+        user = await User.create({
+            login: uniqueLogin,
+            email: normalizedEmail,
+            password: randomPassword,
+            avatar: defaultAvatar,
+            role: (adminMail && normalizedEmail === adminMail.toLowerCase()) ? 'superadmin' : 'user',
+            kevs: 100
+        });
+    } else {
+        if (profilePicture && (!user.avatar || user.avatar.includes('ui-avatars.com'))) {
+            user.avatar = profilePicture;
+        }
+    }
+
+    const { accessToken, refreshToken } = generateTokens(user._id);
+
+    user.refreshTokens.push(refreshToken);
+    await user.save({ validateBeforeSave: false });
+
+    const userResponse = user.toObject();
+    delete userResponse.password;
+    delete userResponse.refreshTokens;
+
+    return { user: userResponse, accessToken, refreshToken };
+};
+
 exports.refreshUserToken = async (currentRefreshToken) => {
     try {
         if (!jwtRefreshSecret) throw new Error('Configuration serveur invalide');
@@ -113,7 +171,7 @@ exports.refreshUserToken = async (currentRefreshToken) => {
         
         const user = await User.findById(decoded.id);
         if (!user || !user.refreshTokens.includes(currentRefreshToken)) {
-            throw new Error('Jeton de rafraîchissement invalide ou expiré');
+            throw new Error('Jeton de rafrachissement invalide ou expir');
         }
 
         const { accessToken, refreshToken: newRefreshToken } = generateTokens(user._id);
@@ -124,7 +182,7 @@ exports.refreshUserToken = async (currentRefreshToken) => {
 
         return { accessToken, refreshToken: newRefreshToken };
     } catch (error) {
-        throw new Error('Session expirée, veuillez vous reconnecter');
+        throw new Error('Session expire, veuillez vous reconnecter');
     }
 };
 
@@ -183,7 +241,7 @@ exports.updateUserProfile = async (userId, updateData) => {
     if (email && email.toLowerCase() !== user.email.toLowerCase()) {
         const existingEmail = await User.findOne({ email: email.toLowerCase() });
         if (existingEmail) {
-            throw new Error('Cet email est déjà utilisé par un autre compte');
+            throw new Error('Cet email est dj utilis par un autre compte');
         }
         user.email = email.toLowerCase();
     }
@@ -191,7 +249,7 @@ exports.updateUserProfile = async (userId, updateData) => {
     if (login && login.toLowerCase() !== user.login.toLowerCase()) {
         const existingLogin = await User.findOne({ login: { $regex: new RegExp(`^${login}$`, 'i') } });
         if (existingLogin) {
-            throw new Error('Ce pseudo est déjà pris');
+            throw new Error('Ce pseudo est dj pris');
         }
         user.login = login;
     }
@@ -207,51 +265,4 @@ exports.updateUserProfile = async (userId, updateData) => {
     delete userResponse.refreshTokens;
 
     return userResponse;
-};
-exports.loginWithGoogle = async ({ email, name, profilePicture }) => {
-    if (!email) throw new Error('Email Google manquant');
-    const normalizedEmail = email.toLowerCase().trim();
-
-    let user = await User.findOne({ email: normalizedEmail });
-
-    if (!user) {
-        let baseLogin = (name || normalizedEmail.split('@')[0])
-            .replace(/[^a-zA-Z0-9_]/g, '')
-            .substring(0, 14);
-        if (!baseLogin) baseLogin = 'Joueur';
-
-        let uniqueLogin = baseLogin;
-        let counter = 1;
-        while (await User.findOne({ login: { $regex: new RegExp(`^${uniqueLogin}$`, 'i') } })) {
-            uniqueLogin = `${baseLogin}${counter}`;
-            counter++;
-        }
-
-        const defaultAvatar = profilePicture || `https://ui-avatars.com/api/?name=${encodeURIComponent(uniqueLogin)}&background=FF5A5F&color=fff&size=128`;
-        const randomPassword = Math.random().toString(36).slice(-10) + 'A1!';
-
-        user = await User.create({
-            login: uniqueLogin,
-            email: normalizedEmail,
-            password: randomPassword,
-            avatar: defaultAvatar,
-            role: (adminMail && normalizedEmail === adminMail.toLowerCase()) ? 'superadmin' : 'user',
-            kevs: 100
-        });
-    } else {
-        if (profilePicture && (!user.avatar || user.avatar.includes('ui-avatars.com'))) {
-            user.avatar = profilePicture;
-        }
-    }
-
-    const { accessToken, refreshToken } = generateTokens(user._id);
-
-    user.refreshTokens.push(refreshToken);
-    await user.save({ validateBeforeSave: false });
-
-    const userResponse = user.toObject();
-    delete userResponse.password;
-    delete userResponse.refreshTokens;
-
-    return { user: userResponse, accessToken, refreshToken };
 };
