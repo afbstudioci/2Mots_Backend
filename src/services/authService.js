@@ -208,3 +208,50 @@ exports.updateUserProfile = async (userId, updateData) => {
 
     return userResponse;
 };
+exports.loginWithGoogle = async ({ email, name, profilePicture }) => {
+    if (!email) throw new Error('Email Google manquant');
+    const normalizedEmail = email.toLowerCase().trim();
+
+    let user = await User.findOne({ email: normalizedEmail });
+
+    if (!user) {
+        let baseLogin = (name || normalizedEmail.split('@')[0])
+            .replace(/[^a-zA-Z0-9_]/g, '')
+            .substring(0, 14);
+        if (!baseLogin) baseLogin = 'Joueur';
+
+        let uniqueLogin = baseLogin;
+        let counter = 1;
+        while (await User.findOne({ login: { $regex: new RegExp(`^${uniqueLogin}$`, 'i') } })) {
+            uniqueLogin = `${baseLogin}${counter}`;
+            counter++;
+        }
+
+        const defaultAvatar = profilePicture || `https://ui-avatars.com/api/?name=${encodeURIComponent(uniqueLogin)}&background=FF5A5F&color=fff&size=128`;
+        const randomPassword = Math.random().toString(36).slice(-10) + 'A1!';
+
+        user = await User.create({
+            login: uniqueLogin,
+            email: normalizedEmail,
+            password: randomPassword,
+            avatar: defaultAvatar,
+            role: (adminMail && normalizedEmail === adminMail.toLowerCase()) ? 'superadmin' : 'user',
+            kevs: 100
+        });
+    } else {
+        if (profilePicture && (!user.avatar || user.avatar.includes('ui-avatars.com'))) {
+            user.avatar = profilePicture;
+        }
+    }
+
+    const { accessToken, refreshToken } = generateTokens(user._id);
+
+    user.refreshTokens.push(refreshToken);
+    await user.save({ validateBeforeSave: false });
+
+    const userResponse = user.toObject();
+    delete userResponse.password;
+    delete userResponse.refreshTokens;
+
+    return { user: userResponse, accessToken, refreshToken };
+};

@@ -1,4 +1,4 @@
-//src/models/User.js
+﻿//src/models/User.js
 const mongoose = require('mongoose');
 const bcrypt = require('bcryptjs');
 
@@ -90,6 +90,27 @@ const userSchema = new mongoose.Schema({
         type: mongoose.Schema.Types.ObjectId,
         ref: 'User'
     }],
+        isVip: {
+        type: Boolean,
+        default: false
+    },
+    vipExpiresAt: {
+        type: Date,
+        default: null
+    },
+    streakFreezes: {
+        type: Number,
+        default: 1
+    },
+    inventory: {
+        boosters: {
+            timeFreeze: { type: Number, default: 2 },
+            superClue: { type: Number, default: 2 },
+            secondChance: { type: Number, default: 1 }
+        },
+        themes: [{ type: String }],
+        avatarFrames: [{ type: String }]
+    },
     chatSettings: [{
         friendId: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
         isMuted: { type: Boolean, default: false },

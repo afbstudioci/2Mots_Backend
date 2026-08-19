@@ -1,11 +1,11 @@
-//src/routes/shopRoutes.js
+﻿//src/routes/shopRoutes.js
 const express = require('express');
 const router = express.Router();
 const { protect } = require('../middlewares/auth');
+const shopController = require('../controllers/shopController');
 
-// Route temporaire : la boutique n'est pas encore disponible
-router.get('/', protect, (req, res) => {
-    res.status(200).json({ status: 'success', data: [] });
-});
+router.get('/catalog', protect, shopController.getCatalog);
+router.post('/buy-with-kevs', protect, shopController.buyWithKevs);
+router.post('/verify-purchase', protect, shopController.verifyPurchase);
 
 module.exports = router;

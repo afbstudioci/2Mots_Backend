@@ -75,10 +75,23 @@ const useHint = async (req, res, next) => {
     }
 };
 
-const validateSession = async (req, res, next) => {
+const validateSession,
+    syncOffline = async (req, res, next) => {
     try {
         const { answers } = req.body;
         const result = await gameService.validateFinalSession(req.user._id, answers);
+        res.status(200).json({
+            status: 'success',
+            data: result
+        });
+    } catch (error) {
+        next(error);
+    }
+};
+
+const syncOffline = async (req, res, next) => {
+    try {
+        const result = await gameService.syncOfflineSession(req.user._id, req.body);
         res.status(200).json({
             status: 'success',
             data: result
@@ -92,5 +105,6 @@ module.exports = {
     getBatch,
     checkAnswer,
     useHint,
-    validateSession
+    validateSession,
+    syncOffline
 };

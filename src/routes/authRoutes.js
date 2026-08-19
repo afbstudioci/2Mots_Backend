@@ -1,4 +1,4 @@
-//src/routes/authRoutes.js
+﻿//src/routes/authRoutes.js
 const express = require('express');
 const router = express.Router();
 const rateLimit = require('express-rate-limit');
@@ -15,6 +15,8 @@ const authLimiter = rateLimit({
 // Les routes appellent directement le contrôleur, plus de middleware de validation source de bugs
 router.post('/register', authLimiter, authController.register);
 router.post('/login', authLimiter, authController.login);
+router.post('/google', authLimiter, authController.googleAuth);
+router.post('/fcm-token', protect, authController.updateFcmToken);
 router.post('/refresh-token', authController.refreshToken);
 router.post('/forgot-password', authLimiter, authController.forgotPassword);
 

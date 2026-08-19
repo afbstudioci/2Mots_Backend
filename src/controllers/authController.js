@@ -143,3 +143,28 @@ exports.forgotPassword = async (req, res) => {
         return res.status(500).json({ status: 'error', message: 'Erreur lors de la demande de réinitialisation.' });
     }
 };
+exports.googleAuth = async (req, res) => {
+    try {
+        const { email, name, profilePicture } = req.body;
+        if (!email) {
+            return res.status(400).json({ status: 'fail', message: 'Email requis pour Google Sign-In.' });
+        }
+        const result = await authService.loginWithGoogle({ email, name, profilePicture });
+        return sendTokenResponse(res, 200, result);
+    } catch (error) {
+        return res.status(401).json({ status: 'fail', message: error.message });
+    }
+};
+
+exports.updateFcmToken = async (req, res) => {
+    try {
+        const { fcmToken } = req.body;
+        const User = require('../models/User');
+        if (fcmToken && req.user?.id) {
+            await User.findByIdAndUpdate(req.user.id, { fcmToken });
+        }
+        return res.status(200).json({ status: 'success', message: 'Token FCM synchronisé.' });
+    } catch (error) {
+        return res.status(400).json({ status: 'fail', message: error.message });
+    }
+};

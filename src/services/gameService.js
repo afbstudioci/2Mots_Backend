@@ -300,9 +300,56 @@ const validateFinalSession = async (userId, answers) => {
     return { totalScore, corrections, kevs: user.kevs };
 };
 
+const syncOfflineSession = async (userId, sessionData) => {
+    const user = await User.findById(userId);
+    if (!user) throw createError('Utilisateur introuvable', 404);
+
+    const { rounds } = sessionData;
+    if (!rounds || !Array.isArray(rounds)) {
+        throw createError('Session invalide', 400);
+    }
+
+    let calculatedScore = 0;
+    let earnedKevs = 0;
+    let correctCount = 0;
+
+    for (const r of rounds) {
+        if (r.isCorrect) {
+            if (r.timeSpentMs && r.timeSpentMs < 400) continue; // Anti-speedhack
+            calculatedScore += 100;
+            earnedKevs += 1;
+            correctCount += 1;
+        }
+    }
+
+    user.kevs += earnedKevs;
+    user.xp += correctCount;
+
+    const enigmasNeeded = 3 + user.level * 2;
+    while (user.xp >= enigmasNeeded) {
+        user.level += 1;
+        user.xp -= enigmasNeeded;
+        user.kevs += 5;
+    }
+
+    if (calculatedScore > user.bestScore) {
+        user.bestScore = calculatedScore;
+    }
+
+    await user.save();
+    return {
+        synced: true,
+        earnedKevs,
+        totalKevs: user.kevs,
+        newLevel: user.level,
+        currentXp: user.xp,
+    };
+};
+
 module.exports = {
     enrichPairsWithOptions,
     checkAnswerRealtime,
     useHint,
     validateFinalSession,
+    syncOfflineSession,
 };
