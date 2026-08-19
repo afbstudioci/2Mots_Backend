@@ -5,22 +5,22 @@ const bcrypt = require('bcryptjs');
 const userSchema = new mongoose.Schema({
     login: {
         type: String,
-        required: [true, 'Le pseudo est obligatoire'],
+        required: [true, "Le pseudo est obligatoire"],
         unique: true,
         trim: true,
-        minlength: [3, 'Le pseudo doit contenir au moins 3 caracteres']
+        minlength: [3, "Le pseudo doit contenir au moins 3 caracteres"]
     },
     email: {
         type: String,
-        required: [true, 'L''e-mail est obligatoire'],
+        required: [true, "L'e-mail est obligatoire"],
         unique: true,
         lowercase: true,
         trim: true
     },
     password: {
         type: String,
-        required: [true, 'Le mot de passe est obligatoire'],
-        minlength: [8, 'Le mot de passe doit contenir au moins 8 caracteres'],
+        required: [true, "Le mot de passe est obligatoire"],
+        minlength: [8, "Le mot de passe doit contenir au moins 8 caracteres"],
         select: false
     },
     avatar: {

@@ -20,7 +20,7 @@ const CATALOG = {
         { id: 'kevs_3000', title: 'Coffre du Maitre', amount: 2500, bonus: 500, priceEur: '9,99 EUR', tag: 'MEILLEURE VALEUR', icon: 'trophy' }
     ],
     streaks: [
-        { id: 'streak_shield_3', title: 'Pack 3 Boucliers de Flamme', desc: 'Protege votre serie quotidienne en cas d''oubli.', priceKevs: 200, icon: 'flame' }
+        { id: 'streak_shield_3', title: 'Pack 3 Boucliers de Flamme', desc: "Protege votre serie quotidienne en cas d'oubli.", priceKevs: 200, icon: 'flame' }
     ],
     boosters: [
         { id: 'time_freeze_3', title: '3x Time-Freeze (+5s)', desc: 'Gele le chrono pendant 5 secondes.', priceKevs: 45, type: 'timeFreeze', count: 3, icon: 'hourglass-outline' },
@@ -110,7 +110,7 @@ exports.buyWithKevs = async (req, res) => {
 
         return res.status(200).json({
             status: 'success',
-            message: `Achat reussi : ${itemFound.title}`,
+            message: "Achat reussi : " + itemFound.title,
             data: {
                 userKevs: user.kevs,
                 streakFreezes: user.streakFreezes,
@@ -158,13 +158,13 @@ exports.verifyPurchase = async (req, res) => {
             }
         });
     } catch (error) {
-        return res.status(500).json({ status: 'error', message: 'Erreur lors de la validation d''achat.' });
+        return res.status(500).json({ status: 'error', message: "Erreur lors de la validation d'achat." });
     }
 };
 
 exports.useBooster = async (req, res) => {
     try {
-        const { boosterType } = req.body; // 'timeFreeze' | 'superClue' | 'secondChance'
+        const { boosterType } = req.body;
         const user = await User.findById(req.user.id);
 
         if (!user) return res.status(404).json({ status: 'fail', message: 'Utilisateur introuvable.' });
@@ -174,10 +174,9 @@ exports.useBooster = async (req, res) => {
         if (available > 0) {
             user.inventory.boosters[boosterType] -= 1;
         } else {
-            // Achat a la volee par Kevs
             const cost = boosterType === 'secondChance' ? 30 : (boosterType === 'superClue' ? 25 : 15);
             if (user.kevs < cost) {
-                return res.status(400).json({ status: 'fail', message: `Kevs insuffisants (${cost} requis).` });
+                return res.status(400).json({ status: 'fail', message: "Kevs insuffisants (" + cost + " requis)." });
             }
             user.kevs -= cost;
         }
@@ -198,7 +197,7 @@ exports.useBooster = async (req, res) => {
 
 exports.equipCosmetic = async (req, res) => {
     try {
-        const { type, itemId } = req.body; // type: 'frame' | 'theme'
+        const { type, itemId } = req.body;
         const user = await User.findById(req.user.id);
 
         if (!user) return res.status(404).json({ status: 'fail', message: 'Utilisateur introuvable.' });
