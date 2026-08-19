@@ -15,10 +15,20 @@ const generateTokens = (userId) => {
     return { accessToken, refreshToken };
 };
 
-const calculateUserRank = async (bestScore) => {
+const calculateUserRank = async (userDoc) => {
+    if (!userDoc) return 1;
+    const score = userDoc.bestScore || 0;
+    const lvl = userDoc.level || 1;
+    const exp = userDoc.xp || 0;
+
     const higher = await User.countDocuments({
         isBanned: false,
-        bestScore: { $gt: bestScore || 0 }
+        _id: { $ne: userDoc._id },
+        $or: [
+            { bestScore: { $gt: score } },
+            { bestScore: score, level: { $gt: lvl } },
+            { bestScore: score, level: lvl, xp: { $gt: exp } }
+        ]
     });
     return higher + 1;
 };
@@ -71,7 +81,7 @@ exports.registerUser = async (login, email, password, referredByCode = null) => 
     await newUser.save({ validateBeforeSave: false });
 
     const userResponse = newUser.toObject();
-    userResponse.rank = await calculateUserRank(userResponse.bestScore);
+    userResponse.rank = await calculateUserRank(newUser);
     delete userResponse.password;
     delete userResponse.refreshTokens;
 
@@ -103,7 +113,7 @@ exports.loginUser = async (loginIdentifier, password) => {
     await user.save({ validateBeforeSave: false });
 
     const userResponse = user.toObject();
-    userResponse.rank = await calculateUserRank(userResponse.bestScore);
+    userResponse.rank = await calculateUserRank(user);
     delete userResponse.password;
     delete userResponse.refreshTokens;
 
@@ -156,7 +166,7 @@ exports.loginWithGoogle = async ({ email, name, profilePicture, mode = 'login' }
     await user.save({ validateBeforeSave: false });
 
     const userResponse = user.toObject();
-    userResponse.rank = await calculateUserRank(userResponse.bestScore);
+    userResponse.rank = await calculateUserRank(user);
     delete userResponse.password;
     delete userResponse.refreshTokens;
 
@@ -200,7 +210,7 @@ exports.getUserProfile = async (userId) => {
         throw new Error('Utilisateur introuvable');
     }
 
-    const rank = await calculateUserRank(user.bestScore);
+    const rank = await calculateUserRank(user);
     const userResponse = user.toObject();
     userResponse.rank = rank;
     
@@ -255,7 +265,7 @@ exports.updateUserProfile = async (userId, updateData) => {
     await user.save();
 
     const userResponse = user.toObject();
-    userResponse.rank = await calculateUserRank(userResponse.bestScore);
+    userResponse.rank = await calculateUserRank(user);
     delete userResponse.password;
     delete userResponse.refreshTokens;
 

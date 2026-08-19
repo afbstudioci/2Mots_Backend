@@ -8,11 +8,11 @@ const userSchema = new mongoose.Schema({
         required: [true, 'Le pseudo est obligatoire'],
         unique: true,
         trim: true,
-        minlength: [3, 'Le pseudo doit contenir au moins 3 caractères']
+        minlength: [3, 'Le pseudo doit contenir au moins 3 caracteres']
     },
     email: {
         type: String,
-        required: [true, 'L\'e-mail est obligatoire'],
+        required: [true, 'L''e-mail est obligatoire'],
         unique: true,
         lowercase: true,
         trim: true
@@ -20,7 +20,7 @@ const userSchema = new mongoose.Schema({
     password: {
         type: String,
         required: [true, 'Le mot de passe est obligatoire'],
-        minlength: [8, 'Le mot de passe doit contenir au moins 8 caractères'],
+        minlength: [8, 'Le mot de passe doit contenir au moins 8 caracteres'],
         select: false
     },
     avatar: {
@@ -38,7 +38,7 @@ const userSchema = new mongoose.Schema({
     },
     kevs: {
         type: Number,
-        default: 0
+        default: 100
     },
     xp: {
         type: Number,
@@ -90,7 +90,7 @@ const userSchema = new mongoose.Schema({
         type: mongoose.Schema.Types.ObjectId,
         ref: 'User'
     }],
-        isVip: {
+    isVip: {
         type: Boolean,
         default: false
     },
@@ -110,6 +110,14 @@ const userSchema = new mongoose.Schema({
         },
         themes: [{ type: String }],
         avatarFrames: [{ type: String }]
+    },
+    equippedFrame: {
+        type: String,
+        default: null
+    },
+    equippedTheme: {
+        type: String,
+        default: null
     },
     chatSettings: [{
         friendId: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
