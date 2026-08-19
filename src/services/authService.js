@@ -17,17 +17,17 @@ const generateTokens = (userId) => {
 
 const calculateUserRank = async (userDoc) => {
     if (!userDoc) return 1;
-    const score = userDoc.bestScore || 0;
     const lvl = userDoc.level || 1;
     const exp = userDoc.xp || 0;
+    const score = userDoc.bestScore || 0;
 
     const higher = await User.countDocuments({
         isBanned: false,
         _id: { $ne: userDoc._id },
         $or: [
-            { bestScore: { $gt: score } },
-            { bestScore: score, level: { $gt: lvl } },
-            { bestScore: score, level: lvl, xp: { $gt: exp } }
+            { level: { $gt: lvl } },
+            { level: lvl, xp: { $gt: exp } },
+            { level: lvl, xp: exp, bestScore: { $gt: score } }
         ]
     });
     return higher + 1;
