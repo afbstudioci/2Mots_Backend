@@ -1,36 +1,20 @@
-//src/services/friendService.js
-const User = require('../models/User');
+﻿//src/services/friendService.js
 const Friendship = require('../models/Friendship');
-const pushService = require('./notificationService');
+const User = require('../models/User');
 
-/**
- * Récupère la liste des amis acceptés
- */
-exports.getFriendList = async (userId) => {
+const getFriendList = async (userId) => {
     const friendships = await Friendship.find({
         users: userId,
         status: 'accepted'
-    }).populate('users', 'login avatar level status');
+    }).populate('users', 'login avatar level isOnline lastActive');
 
-    return friendships
-        .map(f => {
-            const friend = f.users.find(u => u && u._id.toString() !== userId.toString());
-            if (!friend) return null;
-            return {
-                id: friend._id,
-                name: friend.login,
-                avatar: friend.avatar,
-                level: friend.level,
-                status: friend.status || 'offline'
-            };
-        })
-        .filter(f => f !== null);
+    return friendships.map(f => {
+        const friend = f.users.find(u => u._id.toString() !== userId.toString());
+        return friend;
+    }).filter(Boolean);
 };
 
-/**
- * Récupère les demandes d'amis en attente
- */
-exports.getPendingRequests = async (userId) => {
+const getPendingRequests = async (userId) => {
     return await Friendship.find({
         users: userId,
         status: 'pending',
@@ -38,111 +22,86 @@ exports.getPendingRequests = async (userId) => {
     }).populate('requester', 'login avatar level');
 };
 
-/**
- * Récupère les demandes envoyées par l'utilisateur
- */
-exports.getSentRequests = async (userId) => {
+const getSentRequests = async (userId) => {
     return await Friendship.find({
-        requester: userId,
-        status: 'pending'
+        users: userId,
+        status: 'pending',
+        requester: userId
     }).populate('users', 'login avatar level');
 };
 
-/**
- * Envoie une demande d'ami
- */
-exports.sendFriendRequest = async (fromUserId, toUserId) => {
-    if (fromUserId.toString() === toUserId.toString()) {
-        throw new Error("Vous ne pouvez pas vous ajouter vous-même");
+const sendFriendRequest = async (userId, targetId) => {
+    if (userId.toString() === targetId.toString()) {
+        throw new Error('Vous ne pouvez pas vous ajouter vous-même');
     }
 
     const existing = await Friendship.findOne({
-        users: { $all: [fromUserId, toUserId] }
+        users: { $all: [userId, targetId] }
     });
 
     if (existing) {
-        throw new Error("Une demande existe déjà ou vous êtes déjà amis");
+        if (existing.status === 'accepted') throw new Error('Vous êtes déjà amis');
+        if (existing.status === 'pending') throw new Error('Demande déjà en cours');
+        if (existing.status === 'blocked') throw new Error('Action impossible');
     }
 
-    const friendship = await Friendship.create({
-        users: [fromUserId, toUserId],
-        requester: fromUserId,
+    return await Friendship.create({
+        users: [userId, targetId],
+        requester: userId,
         status: 'pending'
     });
-
-    // Notification push au destinataire
-    const sender = await User.findById(fromUserId).select('login');
-    pushService.onFriendRequestSent(toUserId, sender.login);
-
-    return friendship;
 };
 
-/**
- * Accepte une demande d'ami
- */
-exports.acceptFriendRequest = async (userId, requestId) => {
+const acceptFriendRequest = async (userId, requestId) => {
     const friendship = await Friendship.findById(requestId);
-    
-    if (!friendship || friendship.status !== 'pending') {
-        throw new Error("Demande introuvable");
-    }
-
-    // Vérifier que c'est bien l'utilisateur destinataire qui accepte
-    const isRecipient = friendship.users.some(u => u.toString() === userId.toString()) && 
-                        friendship.requester.toString() !== userId.toString();
-
-    if (!isRecipient) {
-        throw new Error("Action non autorisée");
-    }
+    if (!friendship) throw new Error('Demande introuvable');
+    if (!friendship.users.includes(userId)) throw new Error('Action non autorisée');
+    if (friendship.requester.toString() === userId.toString()) throw new Error('Vous ne pouvez pas accepter votre propre demande');
 
     friendship.status = 'accepted';
-    await friendship.save();
-
-    // Progression Mission pour les deux !
-    const missionService = require('./missionService');
-    await missionService.updateMissionProgress(userId, 'friends_added');
-    await missionService.updateMissionProgress(friendship.requester, 'friends_added');
-
-    // Notification push à celui qui avait envoyé la demande
-    const accepter = await User.findById(userId).select('login');
-    pushService.onFriendRequestAccepted(friendship.requester, accepter.login);
-
-    return friendship;
+    return await friendship.save();
 };
 
-/**
- * Recherche des utilisateurs par login
- */
-exports.searchUsers = async (userId, query) => {
+const rejectFriendRequest = async (userId, requestId) => {
+    const friendship = await Friendship.findById(requestId);
+    if (!friendship) throw new Error('Demande introuvable');
+    if (!friendship.users.includes(userId)) throw new Error('Action non autorisée');
+
+    return await Friendship.findByIdAndDelete(requestId);
+};
+
+const searchUsers = async (userId, query) => {
     if (!query) return [];
-
-    const users = await User.find({
-        login: { $regex: query, $options: 'i' },
-        _id: { $ne: userId }
-    }).select('login avatar level').limit(10);
-
-    const usersWithStatus = await Promise.all(users.map(async (u) => {
-        const friendship = await Friendship.findOne({
-            users: { $all: [userId, u._id] }
-        });
-
-        return {
-            ...u.toObject(),
-            friendshipStatus: friendship ? friendship.status : 'none',
-            isRequester: friendship ? friendship.requester.toString() === userId.toString() : false,
-            friendshipId: friendship ? friendship._id : null
-        };
-    }));
-
-    return usersWithStatus;
+    return await User.find({
+        _id: { $ne: userId },
+        login: { $regex: query, $options: 'i' }
+    }).select('login avatar level');
 };
-/**
- * Bloque un utilisateur
- */
-exports.blockUser = async (userId, targetId) => {
-    return await Friendship.findOneAndUpdate(
-        { users: { $all: [userId, targetId] } },
-        { status: 'blocked', requester: userId },
-        { upsert: true, new: true }
-    );
+
+const blockUser = async (userId, targetId) => {
+    let friendship = await Friendship.findOne({
+        users: { $all: [userId, targetId] }
+    });
+
+    if (friendship) {
+        friendship.status = 'blocked';
+        return await friendship.save();
+    }
+
+    return await Friendship.create({
+        users: [userId, targetId],
+        requester: userId,
+        status: 'blocked'
+    });
+};
+
+module.exports = {
+    getFriendList,
+    getPendingRequests,
+    getSentRequests,
+    sendFriendRequest,
+    acceptFriendRequest,
+    rejectFriendRequest,
+    searchUsers,
+    blockUser
 };

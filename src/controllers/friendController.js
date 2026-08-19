@@ -1,4 +1,4 @@
-//src/controllers/friendController.js
+﻿//src/controllers/friendController.js
 const friendService = require('../services/friendService');
 
 exports.getFriends = async (req, res) => {
@@ -30,8 +30,9 @@ exports.getSentRequests = async (req, res) => {
 
 exports.sendRequest = async (req, res) => {
     try {
-        await friendService.sendFriendRequest(req.user.id, req.params.id);
-        res.status(201).json({ status: 'success', message: "Demande envoyée" });
+        const targetId = req.params.id || req.body.friendId;
+        await friendService.sendFriendRequest(req.user.id, targetId);
+        res.status(201).json({ status: 'success', message: 'Demande envoyée' });
     } catch (error) {
         res.status(400).json({ status: 'fail', message: error.message });
     }
@@ -40,7 +41,16 @@ exports.sendRequest = async (req, res) => {
 exports.acceptRequest = async (req, res) => {
     try {
         await friendService.acceptFriendRequest(req.user.id, req.params.id);
-        res.status(200).json({ status: 'success', message: "Demande acceptée" });
+        res.status(200).json({ status: 'success', message: 'Demande acceptée' });
+    } catch (error) {
+        res.status(400).json({ status: 'fail', message: error.message });
+    }
+};
+
+exports.rejectRequest = async (req, res) => {
+    try {
+        await friendService.rejectFriendRequest(req.user.id, req.params.id);
+        res.status(200).json({ status: 'success', message: 'Demande refusée' });
     } catch (error) {
         res.status(400).json({ status: 'fail', message: error.message });
     }
@@ -48,20 +58,22 @@ exports.acceptRequest = async (req, res) => {
 
 exports.search = async (req, res) => {
     try {
-        const users = await friendService.searchUsers(req.user.id, req.query.query);
+        const users = await friendService.searchUsers(req.user.id, req.query.q || req.query.query);
         res.status(200).json({ status: 'success', data: users });
     } catch (error) {
         res.status(500).json({ status: 'error', message: error.message });
     }
 };
+
 exports.blockUser = async (req, res) => {
     try {
         await friendService.blockUser(req.user.id, req.params.id);
-        res.status(200).json({ status: 'success', message: "Utilisateur bloqué" });
+        res.status(200).json({ status: 'success', message: 'Utilisateur bloqué' });
     } catch (error) {
         res.status(500).json({ status: 'error', message: error.message });
     }
 };
+
 exports.useReferralCode = async (req, res) => {
     try {
         const { code } = req.body;
@@ -69,19 +81,18 @@ exports.useReferralCode = async (req, res) => {
         
         const currentUser = await User.findById(req.user.id);
         if (currentUser.referredBy) {
-            return res.status(400).json({ status: 'fail', message: "Vous avez déjà utilisé un code de parrainage" });
+            return res.status(400).json({ status: 'fail', message: 'Vous avez déjà utilisé un code de parrainage' });
         }
 
         const inviter = await User.findOne({ referralCode: code });
         if (!inviter) {
-            return res.status(404).json({ status: 'fail', message: "Code de parrainage invalide" });
+            return res.status(404).json({ status: 'fail', message: 'Code de parrainage invalide' });
         }
 
         if (inviter._id.toString() === currentUser._id.toString()) {
-            return res.status(400).json({ status: 'fail', message: "Vous ne pouvez pas vous parrainer vous-même" });
+            return res.status(400).json({ status: 'fail', message: 'Vous ne pouvez pas vous parrainer vous-même' });
         }
 
-        // Récompenses
         inviter.kevs += 500;
         currentUser.kevs += 100;
         currentUser.referredBy = inviter._id;
