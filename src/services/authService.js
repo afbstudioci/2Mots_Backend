@@ -1,27 +1,26 @@
 ﻿//src/services/authService.js
-const jwt = require('jsonwebtoken');
 const User = require('../models/User');
+const jwt = require('jsonwebtoken');
 
 const jwtSecret = process.env.JWT_SECRET;
 const jwtRefreshSecret = process.env.JWT_REFRESH_SECRET;
-const jwtExpiresIn = process.env.JWT_EXPIRES_IN || '15m';
-const jwtRefreshExpiresIn = process.env.JWT_REFRESH_EXPIRES_IN || '7d';
 const adminMail = process.env.ADMIN_MAIL;
 
 const generateTokens = (userId) => {
     if (!jwtSecret || !jwtRefreshSecret) {
-        throw new Error('Les cls secrtes JWT ne sont pas dfinies sur le serveur.');
+        throw new Error('Variables JWT manquantes');
     }
-
-    const accessToken = jwt.sign({ id: userId }, jwtSecret, {
-        expiresIn: jwtExpiresIn
-    });
-
-    const refreshToken = jwt.sign({ id: userId }, jwtRefreshSecret, {
-        expiresIn: jwtRefreshExpiresIn
-    });
-
+    const accessToken = jwt.sign({ id: userId }, jwtSecret, { expiresIn: '15m' });
+    const refreshToken = jwt.sign({ id: userId }, jwtRefreshSecret, { expiresIn: '30d' });
     return { accessToken, refreshToken };
+};
+
+const calculateUserRank = async (bestScore) => {
+    const higher = await User.countDocuments({
+        isBanned: false,
+        bestScore: { $gt: bestScore || 0 }
+    });
+    return higher + 1;
 };
 
 exports.registerUser = async (login, email, password, referredByCode = null) => {
@@ -37,9 +36,9 @@ exports.registerUser = async (login, email, password, referredByCode = null) => 
 
     if (existingUser) {
         if (existingUser.email === normalizedEmail) {
-            throw new Error('Cet email est dj utilis');
+            throw new Error('Cet email est deja utilise');
         }
-        throw new Error('Ce pseudo est dj pris');
+        throw new Error('Ce pseudo est deja pris');
     }
 
     let referredByUser = null;
@@ -72,6 +71,7 @@ exports.registerUser = async (login, email, password, referredByCode = null) => 
     await newUser.save({ validateBeforeSave: false });
 
     const userResponse = newUser.toObject();
+    userResponse.rank = await calculateUserRank(userResponse.bestScore);
     delete userResponse.password;
     delete userResponse.refreshTokens;
 
@@ -103,6 +103,7 @@ exports.loginUser = async (loginIdentifier, password) => {
     await user.save({ validateBeforeSave: false });
 
     const userResponse = user.toObject();
+    userResponse.rank = await calculateUserRank(userResponse.bestScore);
     delete userResponse.password;
     delete userResponse.refreshTokens;
 
@@ -115,12 +116,10 @@ exports.loginWithGoogle = async ({ email, name, profilePicture, mode = 'login' }
 
     let user = await User.findOne({ email: normalizedEmail });
 
-    // Mode connexion : si aucun compte n'existe avec ce Gmail, informer intelligemment l'utilisateur
     if (!user && mode === 'login') {
-        throw new Error('Aucun compte 2Mots associé à ce Gmail, veuillez vous inscrire.');
+        throw new Error('Aucun compte 2Mots associe a ce Gmail, veuillez vous inscrire.');
     }
 
-    // Mode inscription : créer le compte s'il n'existe pas encore
     if (!user) {
         let baseLogin = (name || normalizedEmail.split('@')[0])
             .replace(/[^a-zA-Z0-9_]/g, '')
@@ -157,6 +156,7 @@ exports.loginWithGoogle = async ({ email, name, profilePicture, mode = 'login' }
     await user.save({ validateBeforeSave: false });
 
     const userResponse = user.toObject();
+    userResponse.rank = await calculateUserRank(userResponse.bestScore);
     delete userResponse.password;
     delete userResponse.refreshTokens;
 
@@ -171,7 +171,7 @@ exports.refreshUserToken = async (currentRefreshToken) => {
         
         const user = await User.findById(decoded.id);
         if (!user || !user.refreshTokens.includes(currentRefreshToken)) {
-            throw new Error('Jeton de rafrachissement invalide ou expir');
+            throw new Error('Jeton de rafraichissement invalide ou expire');
         }
 
         const { accessToken, refreshToken: newRefreshToken } = generateTokens(user._id);
@@ -182,7 +182,7 @@ exports.refreshUserToken = async (currentRefreshToken) => {
 
         return { accessToken, refreshToken: newRefreshToken };
     } catch (error) {
-        throw new Error('Session expire, veuillez vous reconnecter');
+        throw new Error('Session expiree, veuillez vous reconnecter');
     }
 };
 
@@ -200,13 +200,7 @@ exports.getUserProfile = async (userId) => {
         throw new Error('Utilisateur introuvable');
     }
 
-    const higherScoringUsersCount = await User.countDocuments({
-        isBanned: false,
-        bestScore: { $gt: user.bestScore }
-    });
-    
-    const rank = higherScoringUsersCount + 1;
-
+    const rank = await calculateUserRank(user.bestScore);
     const userResponse = user.toObject();
     userResponse.rank = rank;
     
@@ -241,7 +235,7 @@ exports.updateUserProfile = async (userId, updateData) => {
     if (email && email.toLowerCase() !== user.email.toLowerCase()) {
         const existingEmail = await User.findOne({ email: email.toLowerCase() });
         if (existingEmail) {
-            throw new Error('Cet email est dj utilis par un autre compte');
+            throw new Error('Cet email est deja utilise par un autre compte');
         }
         user.email = email.toLowerCase();
     }
@@ -249,7 +243,7 @@ exports.updateUserProfile = async (userId, updateData) => {
     if (login && login.toLowerCase() !== user.login.toLowerCase()) {
         const existingLogin = await User.findOne({ login: { $regex: new RegExp(`^${login}$`, 'i') } });
         if (existingLogin) {
-            throw new Error('Ce pseudo est dj pris');
+            throw new Error('Ce pseudo est deja pris');
         }
         user.login = login;
     }
@@ -261,6 +255,7 @@ exports.updateUserProfile = async (userId, updateData) => {
     await user.save();
 
     const userResponse = user.toObject();
+    userResponse.rank = await calculateUserRank(userResponse.bestScore);
     delete userResponse.password;
     delete userResponse.refreshTokens;
 
