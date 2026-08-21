@@ -1,4 +1,4 @@
-//src/controllers/configController.js
+﻿//src/controllers/configController.js
 
 /**
  * Recupere la configuration publique de l'application (reseaux sociaux, contact, liens)
@@ -11,7 +11,7 @@ exports.getAppConfig = async (req, res) => {
                 facebook: process.env.CONTACT_FACEBOOK || "https://facebook.com",
                 whatsapp: process.env.CONTACT_WHATSAPP || "https://wa.me/0000000000",
                 phone: process.env.CONTACT_PHONE || "+2250000000000",
-                email: process.env.CONTACT_EMAIL || "contact@2mots.com"
+                email: process.env.CONTACT_EMAIL || "afbstudio@gmail.com"
             },
             links: {
                 rules: process.env.LINK_RULES || "https://2mots.com/regles",
