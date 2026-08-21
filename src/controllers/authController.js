@@ -161,3 +161,21 @@ exports.updateFcmToken = async (req, res) => {
         return res.status(400).json({ status: 'fail', message: error.message });
     }
 };
+exports.deleteAccount = async (req, res) => {
+    try {
+        const userId = req.user.id;
+        const User = require('../models/User');
+        const Friend = require('../models/Friend');
+        const UserMission = require('../models/UserMission');
+
+        await Promise.all([
+            Friend.deleteMany({ $or: [{ requester: userId }, { recipient: userId }] }),
+            UserMission.deleteMany({ userId }),
+            User.findByIdAndDelete(userId)
+        ]);
+
+        return res.status(200).json({ status: 'success', message: 'Compte supprimé définitivement.' });
+    } catch (error) {
+        return res.status(500).json({ status: 'error', message: 'Erreur lors de la suppression du compte.' });
+    }
+};

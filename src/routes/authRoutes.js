@@ -25,4 +25,6 @@ router.post('/logout', protect, authController.logout);
 
 router.put('/me', protect, upload.single('avatar'), authController.updateProfile);
 
+router.delete('/account', protect, authController.deleteAccount);
+
 module.exports = router;
