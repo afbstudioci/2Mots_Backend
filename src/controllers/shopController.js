@@ -1,4 +1,4 @@
-﻿//src/controllers/shopController.js
+//src/controllers/shopController.js
 const User = require('../models/User');
 
 const CATALOG = {
@@ -177,6 +177,8 @@ exports.verifyInAppPurchase = async (req, res) => {
         return res.status(500).json({ status: 'error', message: "Erreur lors de la validation d'achat." });
     }
 };
+
+exports.verifyPurchase = exports.verifyInAppPurchase;
 
 exports.useBooster = async (req, res) => {
     try {

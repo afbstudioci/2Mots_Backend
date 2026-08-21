@@ -27,26 +27,54 @@ const shuffleArray = (array) => {
     return arr;
 };
 
+const FALLBACK_VERBS = [
+    'transmettre', 'ecouter', 'regarder', 'construire', 'decouvrir', 'voyager',
+    'proteger', 'rechercher', 'analyser', 'resoudre', 'partager', 'reflechir',
+    'comprendre', 'dessiner', 'ecrire', 'mesurer', 'assembler', 'trancher',
+    'ajuster', 'guider', 'ralentir', 'eclairer', 'nourrir', 'planifier'
+];
+
+const FALLBACK_NOUNS = [
+    'matiere', 'energie', 'surface', 'volume', 'contour', 'element',
+    'origine', 'alliage', 'reflet', 'signal', 'horizon', 'memoire',
+    'lumiere', 'passage', 'machine', 'symbole', 'fardeau', 'chaleur',
+    'cristal', 'vibration', 'parcours', 'mystere', 'structure', 'contact'
+];
+
+const FALLBACK_ADJ = [
+    'robuste', 'precis', 'lumineux', 'profond', 'naturel', 'compact',
+    'dense', 'fluide', 'stable', 'vif', 'intense', 'subtil',
+    'majeur', 'secret', 'lointain', 'complexe', 'pur', 'solide'
+];
+
+const detectGrammaticalType = (word, declaredType) => {
+    if (declaredType && ['verbe', 'nom', 'adjectif'].includes(declaredType.toLowerCase())) {
+        return declaredType.toLowerCase();
+    }
+    const clean = normalizeText(word);
+    if (clean.endsWith('er') || clean.endsWith('ir') || clean.endsWith('re') || clean.endsWith('oir')) {
+        return 'verbe';
+    }
+    return 'nom';
+};
+
 const enrichPairsWithOptions = async (wordPairs) => {
     const enrichedList = [];
 
     for (const rawPair of wordPairs) {
         const correctAnswer = (rawPair.exactMatch && rawPair.exactMatch[0]) || rawPair.word1;
-        let distractors = [];
+        const gramType = detectGrammaticalType(correctAnswer, rawPair.expectedType);
 
+        let distractors = [];
         if (rawPair.distractors && Array.isArray(rawPair.distractors) && rawPair.distractors.length >= 2) {
             distractors = [rawPair.distractors[0], rawPair.distractors[1]];
         } else {
-            const fallbackVerbs = ['trancher', 'ajuster', 'assembler', 'dessiner', 'sculpter', 'peser', 'mesurer', 'lier', 'fixer', 'guider'];
-            const fallbackNouns = ['matiere', 'energie', 'surface', 'volume', 'contour', 'element', 'origine', 'alliage', 'reflet', 'signal'];
-            const fallbackAdj = ['robuste', 'precis', 'lumineux', 'profond', 'naturel', 'compact', 'dense', 'fluide', 'stable', 'vif'];
-            const poolChoice = rawPair.expectedType === 'verbe' ? fallbackVerbs : (rawPair.expectedType === 'adjectif' ? fallbackAdj : fallbackNouns);
+            const poolChoice = gramType === 'verbe' ? FALLBACK_VERBS : (gramType === 'adjectif' ? FALLBACK_ADJ : FALLBACK_NOUNS);
             const filtered = poolChoice.filter(w => normalizeText(w) !== normalizeText(correctAnswer));
             const shuffledFallbacks = shuffleArray(filtered);
-            distractors = [shuffledFallbacks[0] || 'Option A', shuffledFallbacks[1] || 'Option B'];
+            distractors = [shuffledFallbacks[0] || 'Choix A', shuffledFallbacks[1] || 'Choix B'];
         }
 
-        // GARANTIR UN MÉLANGE ALÉATOIRE ABSOLU DES 3 OPTIONS
         const formattedOptions = shuffleArray([
             correctAnswer,
             distractors[0],
@@ -58,7 +86,7 @@ const enrichPairsWithOptions = async (wordPairs) => {
             word1: rawPair.word1,
             word2: rawPair.word2,
             clue: rawPair.clue,
-            expectedType: rawPair.expectedType,
+            expectedType: gramType,
             difficulty: rawPair.difficulty,
             exactMatch: rawPair.exactMatch || [correctAnswer],
             options: formattedOptions
