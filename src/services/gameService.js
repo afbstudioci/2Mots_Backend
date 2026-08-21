@@ -1,4 +1,4 @@
-﻿//src/services/gameService.js
+//src/services/gameService.js
 const WordPair = require('../models/WordPair');
 const User = require('../models/User');
 const missionService = require('./missionService');
@@ -125,6 +125,16 @@ const checkAnswerRealtime = async (userId, wordPairId, userAnswer, timeSpent) =>
 
         timeWon = timeSpent <= 5 ? 8 : (timeSpent <= 15 ? 5 : 3);
     }
+
+    if (!user.playedWords) user.playedWords = [];
+    user.playedWords.push({
+        word: pair._id,
+        cooldownUntil: calculateCooldown()
+    });
+    const now = new Date();
+    user.playedWords = user.playedWords
+        .filter(pw => pw.cooldownUntil && now < new Date(pw.cooldownUntil))
+        .slice(-200);
 
     await user.save();
     const officialAnswer = (pair.exactMatch && pair.exactMatch[0]) ? pair.exactMatch[0] : pair.word1;

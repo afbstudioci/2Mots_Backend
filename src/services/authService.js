@@ -1,4 +1,4 @@
-﻿//src/services/authService.js
+//src/services/authService.js
 const User = require('../models/User');
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
@@ -138,4 +138,117 @@ exports.refreshAccessToken = async (refreshToken) => {
     await user.save({ validateBeforeSave: false });
 
     return { accessToken, refreshToken: newRefreshToken };
+};
+
+exports.refreshUserToken = exports.refreshAccessToken;
+
+exports.logoutUser = async (userId) => {
+    if (!userId) return;
+    await User.findByIdAndUpdate(userId, { $set: { refreshTokens: [] } });
+};
+
+exports.getUserProfile = async (userId) => {
+    const user = await User.findById(userId).lean();
+    if (!user) {
+        throw new Error('Utilisateur non trouvé');
+    }
+    const rank = await calculateUserRank(user);
+    delete user.password;
+    delete user.refreshTokens;
+    return { ...user, rank };
+};
+
+exports.updateUserProfile = async (userId, { login, email, currentPassword, newPassword, avatarUrl }) => {
+    const user = await User.findById(userId).select('+password');
+    if (!user) {
+        throw new Error('Utilisateur non trouvé');
+    }
+
+    if (login && login.trim() !== user.login) {
+        const existingLogin = await User.findOne({ login: login.trim(), _id: { $ne: userId } });
+        if (existingLogin) throw new Error('Ce pseudo est déjà pris');
+        user.login = login.trim();
+    }
+
+    if (email && email.trim().toLowerCase() !== user.email) {
+        const existingEmail = await User.findOne({ email: email.trim().toLowerCase(), _id: { $ne: userId } });
+        if (existingEmail) throw new Error('Cet email est déjà utilisé');
+        user.email = email.trim().toLowerCase();
+    }
+
+    if (newPassword) {
+        if (!currentPassword) {
+            throw new Error('Le mot de passe actuel est requis pour modifier le mot de passe');
+        }
+        const isMatch = await bcrypt.compare(currentPassword, user.password);
+        if (!isMatch) {
+            throw new Error('Mot de passe actuel incorrect');
+        }
+        user.password = newPassword;
+    }
+
+    if (avatarUrl) {
+        user.avatar = avatarUrl;
+    }
+
+    await user.save();
+
+    const userObj = user.toObject();
+    userObj.rank = await calculateUserRank(user);
+    delete userObj.password;
+    delete userObj.refreshTokens;
+    return userObj;
+};
+
+exports.requestPasswordReset = async (email) => {
+    const normalizedEmail = email.trim().toLowerCase();
+    const user = await User.findOne({ email: normalizedEmail });
+    if (!user) return null;
+
+    const crypto = require('crypto');
+    const resetToken = crypto.randomBytes(32).toString('hex');
+    user.resetPasswordToken = crypto.createHash('sha256').update(resetToken).digest('hex');
+    user.resetPasswordExpires = Date.now() + 30 * 60 * 1000; // 30 minutes
+    await user.save({ validateBeforeSave: false });
+    return resetToken;
+};
+
+exports.loginWithGoogle = async ({ email, name, profilePicture, mode }) => {
+    const normalizedEmail = email.trim().toLowerCase();
+    let user = await User.findOne({ email: normalizedEmail });
+
+    if (!user) {
+        if (mode === 'login_only') {
+            throw new Error("Aucun compte n'est associé à cet email Google. Veuillez d'abord vous inscrire.");
+        }
+        const baseLogin = (name || normalizedEmail.split('@')[0]).replace(/[^a-zA-Z0-9_]/g, '').substring(0, 15) || 'user';
+        let uniqueLogin = baseLogin;
+        let suffix = 1;
+        while (await User.findOne({ login: uniqueLogin })) {
+            uniqueLogin = `${baseLogin}${suffix}`;
+            suffix++;
+        }
+
+        const crypto = require('crypto');
+        const randomPassword = crypto.randomBytes(24).toString('hex');
+
+        user = await User.create({
+            login: uniqueLogin,
+            email: normalizedEmail,
+            password: randomPassword,
+            avatar: profilePicture || `https://ui-avatars.com/api/?name=${encodeURIComponent(uniqueLogin)}&background=FF5A5F&color=fff&size=128`,
+            kevs: 100
+        });
+    }
+
+    const { accessToken, refreshToken } = generateTokens(user._id);
+    user.refreshTokens.push(refreshToken);
+    await user.save({ validateBeforeSave: false });
+
+    const userResponse = user.toObject();
+    userResponse.rank = await calculateUserRank(user);
+    delete userResponse.password;
+    delete userResponse.refreshTokens;
+
+    return { user: userResponse, accessToken, refreshToken };
 };

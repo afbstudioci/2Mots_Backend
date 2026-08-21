@@ -1,22 +1,44 @@
-﻿//src/controllers/gameController.js
+//src/controllers/gameController.js
 const WordPair = require('../models/WordPair');
 const gameService = require('../services/gameService');
 
+const mongoose = require('mongoose');
+
 const getBatch = async (req, res, next) => {
     try {
-        const playedWordIds = (req.user.playedWords || [])
+        const excludeQuery = req.query.exclude ? req.query.exclude.split(',').filter(Boolean) : [];
+        const clientExcludeObjectIds = excludeQuery
+            .map(id => {
+                try { return new mongoose.Types.ObjectId(id); } catch { return null; }
+            })
+            .filter(Boolean);
+
+        const playedWordIds = (req.user?.playedWords || [])
             .filter(pw => pw.cooldownUntil && new Date() < new Date(pw.cooldownUntil))
             .map(pw => pw.word);
 
+        const allExcludedIds = [...new Set([...playedWordIds.map(String), ...clientExcludeObjectIds.map(String)])]
+            .map(id => {
+                try { return new mongoose.Types.ObjectId(id); } catch { return null; }
+            })
+            .filter(Boolean);
+
         let wordPairs = await WordPair.aggregate([
-            { $match: { _id: { $nin: playedWordIds }, isActive: true } },
-            { $sample: { size: 10 } }
+            { $match: { _id: { $nin: allExcludedIds }, isActive: true } },
+            { $sample: { size: 15 } }
         ]);
+
+        if (!wordPairs || wordPairs.length < 5) {
+            wordPairs = await WordPair.aggregate([
+                { $match: { _id: { $nin: clientExcludeObjectIds }, isActive: true } },
+                { $sample: { size: 15 } }
+            ]);
+        }
 
         if (!wordPairs || wordPairs.length === 0) {
             wordPairs = await WordPair.aggregate([
                 { $match: { isActive: true } },
-                { $sample: { size: 10 } }
+                { $sample: { size: 15 } }
             ]);
         }
 
