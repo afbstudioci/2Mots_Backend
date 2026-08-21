@@ -14,8 +14,23 @@ const generateTokens = (userId) => {
 };
 
 const calculateUserRank = async (user) => {
-    const count = await User.countDocuments({ xp: { $gt: user.xp || 0 } });
-    return count + 1;
+    const hasPlayed = (user.bestScore || 0) > 0 || (user.xp || 0) > 0 || (user.level || 1) > 1;
+    if (!hasPlayed) return null;
+
+    const userLevel = user.level || 1;
+    const userXp = user.xp || 0;
+    const userBestScore = user.bestScore || 0;
+
+    const countBetter = await User.countDocuments({
+        isBanned: false,
+        $or: [
+            { level: { $gt: userLevel } },
+            { level: userLevel, xp: { $gt: userXp } },
+            { level: userLevel, xp: userXp, bestScore: { $gt: userBestScore } }
+        ]
+    });
+
+    return countBetter + 1;
 };
 
 exports.registerUser = async (login, email, password, referredByCode = null) => {
