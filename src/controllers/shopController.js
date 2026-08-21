@@ -5,31 +5,46 @@ const CATALOG = {
     vip: {
         id: 'vip_monthly',
         title: 'Pass VIP 2Mots',
-        priceEur: '2,99 EUR',
-        period: 'par mois',
+        priceEur: '2,99 €',
         perks: [
-            'Zero publicite dans tout le jeu',
+            'Zéro publicité dans tout le jeu',
             '15 Kevs offerts chaque jour',
-            'Badge dore et Couronne de prestige',
-            'Acces illimite au mode Entrainement'
+            'Double XP & Récompenses ×2 permanentes',
+            '1 Seconde Chance offerte à chaque partie'
         ]
     },
     kevsPacks: [
-        { id: 'kevs_150', title: 'Poignee de Kevs', amount: 150, bonus: 0, priceEur: '0,99 EUR', icon: 'diamond-outline' },
-        { id: 'kevs_700', title: 'Bourse de Reflexion', amount: 600, bonus: 100, priceEur: '2,99 EUR', tag: 'POPULAIRE', icon: 'diamond' },
-        { id: 'kevs_3000', title: 'Coffre du Maitre', amount: 2500, bonus: 500, priceEur: '9,99 EUR', tag: 'MEILLEURE VALEUR', icon: 'trophy' }
+        { id: 'kevs_150', title: 'Poignée de Kevs', amount: 150, bonus: 0, priceEur: '0,99 €', icon: 'diamond-outline' },
+        { id: 'kevs_700', title: 'Bourse de Réflexion', amount: 600, bonus: 100, priceEur: '2,99 €', tag: 'POPULAIRE', icon: 'diamond' },
+        { id: 'kevs_3000', title: 'Coffre du Maître', amount: 2500, bonus: 500, priceEur: '9,99 €', tag: 'MEILLEURE VALEUR', icon: 'trophy' }
     ],
     streaks: [
-        { id: 'streak_shield_3', title: 'Pack 3 Boucliers de Flamme', desc: "Protege votre serie quotidienne en cas d'oubli.", priceKevs: 200, icon: 'flame' }
+        { id: 'streak_shield_3', title: 'Pack 3 Boucliers de Flamme', desc: "Protège votre série quotidienne en cas d'oubli.", priceKevs: 200, icon: 'flame', accentColor: '#F97316' }
     ],
     boosters: [
-        { id: 'time_freeze_3', title: '3x Time-Freeze (+5s)', desc: 'Gele le chrono pendant 5 secondes.', priceKevs: 45, type: 'timeFreeze', count: 3, icon: 'hourglass-outline' },
-        { id: 'super_clue_3', title: '3x Super-Indice', desc: 'Elimine immediatement 2 mauvais choix.', priceKevs: 75, type: 'superClue', count: 3, icon: 'bulb-outline' },
-        { id: 'second_chance_2', title: '2x Seconde Chance', desc: 'Permet de continuer une partie apres un Game Over.', priceKevs: 100, type: 'secondChance', count: 2, icon: 'refresh-circle-outline' }
+        { id: 'time_freeze_3', title: '3x Time-Freeze (+5s)', desc: 'Gèle le chrono pendant 5 secondes.', priceKevs: 45, type: 'timeFreeze', count: 3, icon: 'hourglass-outline', accentColor: '#0EA5E9' },
+        { id: 'super_clue_3', title: '3x Super-Indice', desc: 'Élimine immédiatement 2 mauvais choix.', priceKevs: 75, type: 'superClue', count: 3, icon: 'bulb-outline', accentColor: '#F59E0B' },
+        { id: 'second_chance_2', title: '2x Seconde Chance', desc: 'Permet de continuer une partie après un Game Over.', priceKevs: 100, type: 'secondChance', count: 2, icon: 'refresh-circle-outline', accentColor: '#10B981' }
     ],
-    cosmetics: [
-        { id: 'theme_cyberpunk', title: 'Theme Neon Cyberpunk', desc: 'Ambiance futuriste aux neons vibrants.', priceKevs: 300, type: 'theme', icon: 'color-palette-outline' },
-        { id: 'frame_golden_crown', title: 'Cadre Couronne Doree', desc: 'Une aura etincelante autour de votre avatar.', priceKevs: 250, type: 'frame', icon: 'sparkles-outline' }
+    combos: [
+        {
+            id: 'pack_mega_joker',
+            title: 'Méga Pack Joker (-30%)',
+            desc: '5x Time-Freeze + 5x Super-Indice + 3x Seconde Chance.',
+            priceKevs: 250,
+            icon: 'gift-outline',
+            accentColor: '#8B5CF6',
+            rewards: { timeFreeze: 5, superClue: 5, secondChance: 3 }
+        },
+        {
+            id: 'pack_survival_master',
+            title: 'Pack Survie & Flammes',
+            desc: '3x Seconde Chance + 3x Boucliers de Flamme.',
+            priceKevs: 350,
+            icon: 'shield-checkmark-outline',
+            accentColor: '#EC4899',
+            rewards: { secondChance: 3, streakFreezes: 3 }
+        }
     ]
 };
 
@@ -43,9 +58,7 @@ exports.getCatalog = async (req, res) => {
                 userKevs: user?.kevs || 0,
                 streakFreezes: user?.streakFreezes || 0,
                 isVip: Boolean(user?.isVip),
-                inventory: user?.inventory || { boosters: { timeFreeze: 2, superClue: 2, secondChance: 1 } },
-                equippedFrame: user?.equippedFrame || null,
-                equippedTheme: user?.equippedTheme || null
+                inventory: user?.inventory || { boosters: { timeFreeze: 2, superClue: 2, secondChance: 1 } }
             }
         });
     } catch (error) {
@@ -71,8 +84,8 @@ exports.buyWithKevs = async (req, res) => {
         } else if (category === 'boosters') {
             itemFound = CATALOG.boosters.find(b => b.id === itemId);
             if (itemFound) itemCost = itemFound.priceKevs;
-        } else if (category === 'cosmetics') {
-            itemFound = CATALOG.cosmetics.find(c => c.id === itemId);
+        } else if (category === 'combos') {
+            itemFound = CATALOG.combos.find(c => c.id === itemId);
             if (itemFound) itemCost = itemFound.priceKevs;
         }
 
@@ -86,37 +99,39 @@ exports.buyWithKevs = async (req, res) => {
 
         user.kevs -= itemCost;
 
+        if (!user.inventory) user.inventory = { boosters: { timeFreeze: 0, superClue: 0, secondChance: 0 } };
+        if (!user.inventory.boosters) user.inventory.boosters = { timeFreeze: 0, superClue: 0, secondChance: 0 };
+
         if (category === 'streaks') {
             user.streakFreezes = (user.streakFreezes || 0) + 3;
         } else if (category === 'boosters') {
-            if (!user.inventory) user.inventory = { boosters: {} };
-            if (!user.inventory.boosters) user.inventory.boosters = {};
             const currentCount = user.inventory.boosters[itemFound.type] || 0;
             user.inventory.boosters[itemFound.type] = currentCount + (itemFound.count || 1);
-        } else if (category === 'cosmetics') {
-            if (!user.inventory) user.inventory = { themes: [], avatarFrames: [] };
-            if (itemFound.type === 'theme') {
-                if (!user.inventory.themes) user.inventory.themes = [];
-                if (!user.inventory.themes.includes(itemFound.id)) user.inventory.themes.push(itemFound.id);
-                user.equippedTheme = itemFound.id;
-            } else if (itemFound.type === 'frame') {
-                if (!user.inventory.avatarFrames) user.inventory.avatarFrames = [];
-                if (!user.inventory.avatarFrames.includes(itemFound.id)) user.inventory.avatarFrames.push(itemFound.id);
-                user.equippedFrame = itemFound.id;
+        } else if (category === 'combos' && itemFound.rewards) {
+            if (itemFound.rewards.timeFreeze) {
+                user.inventory.boosters.timeFreeze = (user.inventory.boosters.timeFreeze || 0) + itemFound.rewards.timeFreeze;
+            }
+            if (itemFound.rewards.superClue) {
+                user.inventory.boosters.superClue = (user.inventory.boosters.superClue || 0) + itemFound.rewards.superClue;
+            }
+            if (itemFound.rewards.secondChance) {
+                user.inventory.boosters.secondChance = (user.inventory.boosters.secondChance || 0) + itemFound.rewards.secondChance;
+            }
+            if (itemFound.rewards.streakFreezes) {
+                user.streakFreezes = (user.streakFreezes || 0) + itemFound.rewards.streakFreezes;
             }
         }
 
+        user.markModified('inventory');
         await user.save();
 
         return res.status(200).json({
             status: 'success',
-            message: "Achat reussi : " + itemFound.title,
+            message: 'Achat réussi : ' + itemFound.title,
             data: {
                 userKevs: user.kevs,
                 streakFreezes: user.streakFreezes,
-                inventory: user.inventory,
-                equippedFrame: user.equippedFrame,
-                equippedTheme: user.equippedTheme
+                inventory: user.inventory
             }
         });
     } catch (error) {
@@ -124,7 +139,7 @@ exports.buyWithKevs = async (req, res) => {
     }
 };
 
-exports.verifyPurchase = async (req, res) => {
+exports.verifyInAppPurchase = async (req, res) => {
     try {
         const { packId } = req.body;
         const user = await User.findById(req.user.id);
@@ -146,11 +161,12 @@ exports.verifyPurchase = async (req, res) => {
             }
         }
 
+        user.markModified('inventory');
         await user.save();
 
         return res.status(200).json({
             status: 'success',
-            message: 'Achat In-App valide avec succes !',
+            message: 'Achat In-App validé avec succès !',
             data: {
                 userKevs: user.kevs,
                 isVip: user.isVip,
@@ -169,10 +185,13 @@ exports.useBooster = async (req, res) => {
 
         if (!user) return res.status(404).json({ status: 'fail', message: 'Utilisateur introuvable.' });
 
-        const available = user.inventory?.boosters?.[boosterType] || 0;
+        if (!user.inventory) user.inventory = { boosters: { timeFreeze: 0, superClue: 0, secondChance: 0 } };
+        if (!user.inventory.boosters) user.inventory.boosters = { timeFreeze: 0, superClue: 0, secondChance: 0 };
+
+        const available = user.inventory.boosters[boosterType] || 0;
 
         if (available > 0) {
-            user.inventory.boosters[boosterType] -= 1;
+            user.inventory.boosters[boosterType] = available - 1;
         } else {
             const cost = boosterType === 'secondChance' ? 30 : (boosterType === 'superClue' ? 25 : 15);
             if (user.kevs < cost) {
@@ -181,40 +200,15 @@ exports.useBooster = async (req, res) => {
             user.kevs -= cost;
         }
 
+        user.markModified('inventory');
         await user.save();
 
         return res.status(200).json({
             status: 'success',
             data: {
-                userKevs: user.kevs,
-                inventory: user.inventory
-            }
-        });
-    } catch (error) {
-        return res.status(500).json({ status: 'error', message: error.message });
-    }
-};
-
-exports.equipCosmetic = async (req, res) => {
-    try {
-        const { type, itemId } = req.body;
-        const user = await User.findById(req.user.id);
-
-        if (!user) return res.status(404).json({ status: 'fail', message: 'Utilisateur introuvable.' });
-
-        if (type === 'frame') {
-            user.equippedFrame = itemId || null;
-        } else if (type === 'theme') {
-            user.equippedTheme = itemId || null;
-        }
-
-        await user.save();
-
-        return res.status(200).json({
-            status: 'success',
-            data: {
-                equippedFrame: user.equippedFrame,
-                equippedTheme: user.equippedTheme
+                boosterType,
+                remainingCount: user.inventory.boosters[boosterType] || 0,
+                userKevs: user.kevs
             }
         });
     } catch (error) {
