@@ -15,6 +15,16 @@ const sendTokenResponse = (res, statusCode, result) => {
     });
 };
 
+const getErrorMessage = (error) => {
+    if (error?.issues && Array.isArray(error.issues) && error.issues.length > 0) {
+        return error.issues[0].message;
+    }
+    if (error?.errors && Array.isArray(error.errors) && error.errors.length > 0) {
+        return error.errors[0].message || error.errors[0];
+    }
+    return error?.message || 'Données invalides fournies.';
+};
+
 exports.register = async (req, res) => {
     try {
         const validatedData = await registerSchema.parseAsync(req.body);
@@ -25,11 +35,8 @@ exports.register = async (req, res) => {
         const result = await authService.registerUser(login, email, password, referralCode);
         return sendTokenResponse(res, 201, result);
     } catch (error) {
-        if (error instanceof z.ZodError) {
-            const errors = error.errors.map(e => e.message);
-            return res.status(400).json({ status: 'fail', message: errors[0] });
-        }
-        return res.status(400).json({ status: 'fail', message: error.message });
+        const message = getErrorMessage(error);
+        return res.status(400).json({ status: 'fail', message });
     }
 };
 
@@ -40,11 +47,8 @@ exports.login = async (req, res) => {
         const result = await authService.loginUser(login, password);
         return sendTokenResponse(res, 200, result);
     } catch (error) {
-        if (error instanceof z.ZodError) {
-            const errors = error.errors.map(e => e.message);
-            return res.status(400).json({ status: 'fail', message: errors[0] });
-        }
-        return res.status(401).json({ status: 'fail', message: error.message });
+        const message = getErrorMessage(error);
+        return res.status(401).json({ status: 'fail', message });
     }
 };
 
