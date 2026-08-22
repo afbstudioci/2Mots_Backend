@@ -61,29 +61,41 @@ app.get('/api/health', (req, res) => {
 
 app.use((err, req, res, next) => {
     console.error(`[Erreur Système] ${err.message}`);
-    console.error(err.stack);
 
     if (err.code === 11000) {
-        const field = Object.keys(err.keyValue)[0];
-        const fieldName = field === 'login' ? 'pseudo' : field;
+        const field = Object.keys(err.keyValue || {})[0];
+        const fieldName = field === 'login' ? 'pseudo' : (field === 'email' ? 'adresse email' : field);
         return res.status(400).json({
-            status: 'error',
+            status: 'fail',
             message: `Ce ${fieldName} est déjà utilisé.`
         });
     }
 
-    if (err.message === 'Non autorisé par les règles CORS.') {
-        return res.status(403).json({ status: 'error', message: 'Origine non autorisée.' });
+    if (err.name === 'ValidationError') {
+        const firstError = Object.values(err.errors || {})[0];
+        return res.status(400).json({
+            status: 'fail',
+            message: firstError ? firstError.message : 'Données invalides fournies.'
+        });
     }
 
-    const statusCode = err.statusCode || 500;
+    if (err.name === 'CastError') {
+        return res.status(400).json({
+            status: 'fail',
+            message: 'Identifiant ou ressource invalide.'
+        });
+    }
+
+    if (err.message === 'Non autorisé par les règles CORS.') {
+        return res.status(403).json({ status: 'fail', message: 'Origine non autorisée.' });
+    }
+
+    const statusCode = err.statusCode || (err.message ? 400 : 500);
     const isClientError = statusCode >= 400 && statusCode < 500;
 
     return res.status(statusCode).json({
         status: isClientError ? 'fail' : 'error',
-        message: (isClientError || process.env.NODE_ENV !== 'production')
-            ? err.message
-            : 'Une erreur interne est survenue.'
+        message: err.message || 'Une erreur est survenue.'
     });
 });
 

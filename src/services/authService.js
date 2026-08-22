@@ -34,16 +34,37 @@ const calculateUserRank = async (user) => {
 };
 
 exports.registerUser = async (login, email, password, referredByCode = null) => {
+    if (!login || typeof login !== 'string' || login.trim().length === 0) {
+        throw new Error('Le pseudo est obligatoire.');
+    }
     const normalizedLogin = login.trim();
+    if (normalizedLogin.length < 3) {
+        throw new Error('Le pseudo doit contenir au moins 3 caractères.');
+    }
+    if (normalizedLogin.length > 20) {
+        throw new Error('Le pseudo ne peut pas dépasser 20 caractères.');
+    }
+
+    if (!email || typeof email !== 'string' || email.trim().length === 0) {
+        throw new Error("L'adresse email est obligatoire.");
+    }
     const normalizedEmail = email.trim().toLowerCase();
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(normalizedEmail)) {
+        throw new Error('Veuillez fournir une adresse email valide.');
+    }
+
+    if (!password || typeof password !== 'string' || password.length < 8) {
+        throw new Error('Le mot de passe doit contenir au moins 8 caractères.');
+    }
 
     const existingUser = await User.findOne({
         $or: [{ email: normalizedEmail }, { login: normalizedLogin }]
     });
 
     if (existingUser) {
-        if (existingUser.email === normalizedEmail) throw new Error('Cet email est déjà utilisé');
-        throw new Error('Ce pseudo est déjà pris');
+        if (existingUser.email === normalizedEmail) throw new Error('Cet email est déjà utilisé.');
+        throw new Error('Ce pseudo est déjà pris.');
     }
 
     let referredByUser = null;
