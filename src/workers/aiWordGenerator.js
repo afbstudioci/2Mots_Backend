@@ -20,15 +20,33 @@ const checkAndResetDailyQuota = () => {
 const difficulties = ['FACILE', 'MOYEN', 'DIFFICILE'];
 
 const buildGenerationPrompt = (difficulty) => {
-    return "Tu es un createur expert d'enigmes pour le jeu '2 MOTS'. " +
-        "L'objectif est d'associer deux mots francais indices (word1, word2) avec un troisieme mot mystere (exactMatch).\n" +
-        "REGLE D'OR GRAMMATICALE ABSOLUE :\n" +
-        "- Si exactMatch est un verbe a l'infinitif (ex: 'chanter'), expectedType DOIT valoir 'verbe' ET distractors DOIVENT etre 2 verbes a l'infinitif (ex: ['danser', 'jouer']).\n" +
-        "- Si exactMatch est un nom (ex: 'plage'), expectedType DOIT valoir 'nom' ET distractors DOIVENT etre 2 noms (ex: ['piscine', 'desert']).\n" +
-        "- Si exactMatch est un adjectif (ex: 'lumineux'), expectedType DOIT valoir 'adjectif' ET distractors DOIVENT etre 2 adjectifs (ex: ['sombre', 'brillant']).\n" +
-        "INTERDICTION FORMELLE de melanger les natures grammaticales dans une enigme.\n" +
-        "Genere exactement 15 enigmes en francais pour la difficulte '" + difficulty + "'.\n" +
-        "Reponds STRICTEMENT par un JSON valide au format: [{\"word1\":\"...\",\"word2\":\"...\",\"clue\":\"...\",\"expectedType\":\"verbe\"|\"nom\"|\"adjectif\",\"exactMatch\":[\"...\"],\"distractors\":[\"...\", \"...\"]}]";
+    return "Tu es un createur expert d'enigmes pour le jeu de reflexion '2 MOTS'.\n" +
+        "La mecanique du jeu repose EXCLUSIVEMENT sur la decouverte du POINT COMMUN logique ou de la PROPRIETE PARTAGEE entre deux mots d'entree (word1, word2).\n\n" +
+        "REGLES DE CONCEPTION DES ENIGMES :\n\n" +
+        "1. LOGIQUE DU POINT COMMUN (exactMatch) :\n" +
+        "   - Le mot solution DOIT etre une caracteristique, une propriete, une fonction, une matiere ou un attribut partage sans ambiguite par word1 et word2.\n\n" +
+        "2. REGLE POUR LE CHAMP 'clue' (QUESTION SUBTILE) :\n" +
+        "   - Formule 'clue' sous forme de courte question ouverte et intrigante qui guide la reflexion SANS vendre la meche.\n" +
+        "   - INTERDICTION STRICTE d'utiliser des mots indicateurs directs comme 'couleur', 'matiere', 'forme', 'animal', 'fruit', 'metier', 'verbe', 'nom'.\n" +
+        "   - La question doit rester assez ouverte pour que les 3 propositions restent toutes grammaticalement et semantiquement plausibles a la lecture de la question.\n" +
+        "   - Exemples de questions subtiles :\n" +
+        "     * CITRON + SOLEIL -> exactMatch: 'JAUNE' -> clue: 'Quel eclat partagent-ils ?' (NON : 'Quelle couleur...')\n" +
+        "     * OISEAU + AVION -> exactMatch: 'AILES' -> clue: 'Qu\\'exploitent-ils pour dominer les airs ?' (NON : 'Quel membre ont-ils...')\n" +
+        "     * TABLE + ARBRE -> exactMatch: 'BOIS' -> clue: 'Quelle essence les relie ?' (NON : 'En quelle matiere sont-ils...')\n" +
+        "     * CHRONOMETRE + REGLE -> exactMatch: 'MESURE' -> clue: 'Quelle est leur mission partagee ?' (NON : 'Que mesurent-ils...')\n\n" +
+        "3. REGLE D'OR GRAMMATICALE ABSOLUE :\n" +
+        "   - exactMatch et les 2 distractors DOIVENT imperativement partager la MEME nature grammaticale (3 adjectifs, 3 noms au singulier, ou 3 verbes a l'infinitif).\n" +
+        "   - INTERDICTION STRICTE de melanger les natures de mots dans une meme enigme.\n\n" +
+        "4. REGLE DE QUALITE DES DISTRACTEURS (distractors) :\n" +
+        "   - Chaque distracteur doit avoir un lien logique fort avec word1 OU word2 individuellement, mais JAMAIS avec les deux en meme temps.\n" +
+        "   - Les distracteurs doivent etre des pieges credibles par rapport a la question posee dans 'clue'.\n\n" +
+        "5. PROGRESSION PAR DIFFICULTE ('" + difficulty + "') :\n" +
+        "   - FACILE : Proprietes physiques observables (ex: 'NEIGE' + 'DENT' -> 'BLANC').\n" +
+        "   - MOYEN : Usages, fonctions, matieres, environnements partages (ex: 'LUNETTES' + 'TELESCOPE' -> 'VISION').\n" +
+        "   - DIFFICILE : Concepts abstraits, polysemie, caracteristiques invisibles ou metaphoriques (ex: 'BANQUE' + 'FLEUVE' -> 'LIT').\n\n" +
+        "Genere exactement 15 enigmes en francais pour la difficulte '" + difficulty + "'.\n\n" +
+        "Reponds STRICTEMENT par un tableau JSON valide au format suivant (sans markdown, sans backticks ```json) :\n" +
+        "[{\"word1\":\"MOT_1\",\"word2\":\"MOT_2\",\"clue\":\"Courte question subtile ?\",\"expectedType\":\"adjectif\"|\"nom\"|\"verbe\",\"exactMatch\":[\"SOLUTION_COMMUNE\"],\"distractors\":[\"PIEGE_LIE_A_MOT1\",\"PIEGE_LIE_A_MOT2\"]}]";
 };
 
 const generateAndStoreWords = async () => {

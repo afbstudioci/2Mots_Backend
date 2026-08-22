@@ -130,12 +130,15 @@ const checkAnswerRealtime = async (userId, wordPairId, userAnswer, timeSpent) =>
     let leveledUp = false;
     let currentXp = user.xp;
     let newLevel = user.level;
+    let isFastCombo = false;
 
     if (isCorrect) {
         await missionService.updateMissionProgress(userId, 'words_solved');
-        earnedKevs = 1;
+        earnedKevs = timeSpent <= 3 ? 3 : 1; // +1 de base + 2 bonus si < 3s
+        if (timeSpent <= 3) isFastCombo = true;
+
         user.kevs = (user.kevs || 0) + earnedKevs;
-        user.xp += 1;
+        user.xp += isFastCombo ? 2 : 1;
         currentXp = user.xp;
 
         const enigmasNeeded = 3 + user.level * 2;
@@ -174,6 +177,7 @@ const checkAnswerRealtime = async (userId, wordPairId, userAnswer, timeSpent) =>
         accuracy,
         timeWon,
         earnedKevs,
+        isFastCombo,
         totalKevs: user.kevs,
         leveledUp,
         newLevel,
