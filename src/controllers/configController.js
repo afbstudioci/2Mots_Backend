@@ -1,12 +1,20 @@
-﻿//src/controllers/configController.js
+//src/controllers/configController.js
 
 /**
- * Recupere la configuration publique de l'application (reseaux sociaux, contact, liens)
- * Les donnees proviennent des variables d'environnement pour une securite et modularite maximales.
+ * Recupere la configuration publique de l'application (versioning, contact, liens)
  */
 exports.getAppConfig = async (req, res) => {
     try {
         const config = {
+            versioning: {
+                latestVersionCode: parseInt(process.env.LATEST_VERSION_CODE, 10) || 11,
+                minVersionCode: parseInt(process.env.MIN_VERSION_CODE, 10) || 1,
+                latestVersionName: process.env.LATEST_VERSION_NAME || "1.0.0",
+                forceUpdate: process.env.FORCE_UPDATE === 'true',
+                updateTitle: process.env.UPDATE_TITLE || "Mise à jour disponible",
+                updateMessage: process.env.UPDATE_MESSAGE || "Une nouvelle version de votre application est disponible. Elle contient des améliorations importantes.",
+                storeUrl: "https://play.google.com/store/apps/details?id=com.afbstudio.twomots"
+            },
             contact: {
                 facebook: process.env.CONTACT_FACEBOOK || "https://facebook.com",
                 whatsapp: process.env.CONTACT_WHATSAPP || "https://wa.me/0000000000",
