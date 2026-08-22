@@ -99,8 +99,8 @@ const useHint = async (req, res, next) => {
 
 const validateSession = async (req, res, next) => {
     try {
-        const { answers } = req.body;
-        const result = await gameService.validateFinalSession(req.user._id, answers);
+        const { answers, score } = req.body;
+        const result = await gameService.validateFinalSession(req.user._id, answers, score);
         res.status(200).json({
             status: 'success',
             data: result

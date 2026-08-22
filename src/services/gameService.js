@@ -198,40 +198,41 @@ const useHint = async (userId) => {
     return { kevs: user.kevs };
 };
 
-const validateFinalSession = async (userId, answers) => {
+const validateFinalSession = async (userId, answers, directScore) => {
     const user = await User.findById(userId);
     if (!user) throw createError('Utilisateur introuvable', 404);
-    if (!answers || !Array.isArray(answers)) throw createError('Format invalide', 400);
 
-    let totalScore = 0;
+    let calculatedScore = 0;
     const corrections = [];
 
-    for (const item of answers) {
-        if (!item.wordPairId) continue;
-        const pair = await WordPair.findById(item.wordPairId);
-        if (!pair) continue;
-
-        const userAnswer = normalizeText(item.answer);
-        const checkArray = (arr) => arr && Array.isArray(arr) ? arr.map(normalizeText).includes(userAnswer) : false;
-
-        const isCorrect = checkArray(pair.exactMatch);
-        if (isCorrect) totalScore += 10;
-        else {
-            corrections.push({
-                word1: pair.word1,
-                word2: pair.word2,
-                expectedAnswer: (pair.exactMatch && pair.exactMatch[0]) || 'Inconnu',
-                userAnswer: item.answer || 'Non repondu'
-            });
+    if (Array.isArray(answers)) {
+        for (const item of answers) {
+            if (item.isCorrect) {
+                calculatedScore += 1;
+            } else if (item.wordPairId) {
+                const pair = await WordPair.findById(item.wordPairId);
+                if (pair) {
+                    corrections.push({
+                        word1: pair.word1,
+                        word2: pair.word2,
+                        expectedAnswer: (pair.exactMatch && pair.exactMatch[0]) || 'Inconnu',
+                        userAnswer: item.answer || 'Temps écoulé'
+                    });
+                }
+            }
         }
     }
 
-    if (totalScore > (user.bestScore || 0)) {
-        user.bestScore = totalScore;
+    const sessionScore = typeof directScore === 'number' && directScore >= 0 
+        ? directScore 
+        : calculatedScore;
+
+    if (sessionScore > (user.bestScore || 0)) {
+        user.bestScore = sessionScore;
     }
 
     await user.save();
-    return { totalScore, corrections, kevs: user.kevs };
+    return { totalScore: sessionScore, bestScore: user.bestScore, corrections, kevs: user.kevs };
 };
 
 const syncOfflineSession = async (userId, sessionData) => {
