@@ -1,4 +1,4 @@
-﻿//src/controllers/authController.js
+//src/controllers/authController.js
 const authService = require('../services/authService');
 const cloudinary = require('../config/cloudinary');
 const { registerSchema, loginSchema } = require('../middlewares/validators');
@@ -163,19 +163,22 @@ exports.updateFcmToken = async (req, res) => {
 };
 exports.deleteAccount = async (req, res) => {
     try {
-        const userId = req.user.id;
+        const userId = req.user.id || req.user._id;
         const User = require('../models/User');
-        const Friend = require('../models/Friend');
+        const Friendship = require('../models/Friendship');
         const UserMission = require('../models/UserMission');
+        const Message = require('../models/Message');
 
         await Promise.all([
-            Friend.deleteMany({ $or: [{ requester: userId }, { recipient: userId }] }),
+            Friendship.deleteMany({ $or: [{ requester: userId }, { recipient: userId }] }),
             UserMission.deleteMany({ userId }),
+            Message.deleteMany({ $or: [{ sender: userId }, { recipient: userId }] }),
             User.findByIdAndDelete(userId)
         ]);
 
         return res.status(200).json({ status: 'success', message: 'Compte supprimé définitivement.' });
     } catch (error) {
+        console.error('[AUTH] Erreur suppression compte:', error);
         return res.status(500).json({ status: 'error', message: 'Erreur lors de la suppression du compte.' });
     }
 };
