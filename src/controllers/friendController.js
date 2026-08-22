@@ -1,100 +1,71 @@
-﻿//src/controllers/friendController.js
-const Friend = require('../models/Friend');
+//src/controllers/friendController.js
+const friendService = require('../services/friendService');
 const User = require('../models/User');
 
-exports.sendRequest = async (req, res) => {
+exports.getFriends = async (req, res) => {
     try {
-        const { recipientId } = req.body;
-        const senderId = req.user.id;
-
-        if (senderId === recipientId) {
-            return res.status(400).json({ status: 'fail', message: 'Impossible de s\'ajouter soi-même en ami.' });
-        }
-
-        const existing = await Friend.findOne({
-            $or: [
-                { requester: senderId, recipient: recipientId },
-                { requester: recipientId, recipient: senderId }
-            ]
-        });
-
-        if (existing) {
-            if (existing.status === 'accepted') {
-                return res.status(400).json({ status: 'fail', message: 'Vous êtes déjà amis.' });
-            }
-            if (existing.status === 'pending') {
-                return res.status(400).json({ status: 'fail', message: 'Une demande est déjà en attente.' });
-            }
-            if (existing.status === 'blocked') {
-                return res.status(403).json({ status: 'fail', message: 'Action impossible.' });
-            }
-        }
-
-        const newFriendship = await Friend.create({
-            requester: senderId,
-            recipient: recipientId,
-            status: 'pending'
-        });
-
-        return res.status(201).json({ status: 'success', data: { friendship: newFriendship } });
-    } catch (error) {
-        return res.status(500).json({ status: 'error', message: error.message });
-    }
-};
-
-exports.acceptRequest = async (req, res) => {
-    try {
-        const { friendshipId } = req.body;
-        const friendship = await Friend.findById(friendshipId);
-
-        if (!friendship || friendship.recipient.toString() !== req.user.id) {
-            return res.status(404).json({ status: 'fail', message: 'Demande introuvable.' });
-        }
-
-        friendship.status = 'accepted';
-        await friendship.save();
-
-        return res.status(200).json({ status: 'success', data: { friendship } });
-    } catch (error) {
-        return res.status(500).json({ status: 'error', message: error.message });
-    }
-};
-
-exports.getFriendsList = async (req, res) => {
-    try {
-        const userId = req.user.id;
-        const friendships = await Friend.find({
-            $or: [{ requester: userId }, { recipient: userId }],
-            status: 'accepted'
-        }).populate('requester recipient', 'login avatar level rank status lastSeen isVip');
-
-        const friends = friendships.map(f => {
-            const isRequester = f.requester._id.toString() === userId;
-            const friendData = isRequester ? f.recipient : f.requester;
-            return {
-                friendshipId: f._id,
-                ...friendData.toObject()
-            };
-        });
-
+        const friends = await friendService.getFriendList(req.user.id);
         return res.status(200).json({ status: 'success', data: { friends } });
     } catch (error) {
         return res.status(500).json({ status: 'error', message: error.message });
     }
 };
 
+exports.getRequests = async (req, res) => {
+    try {
+        const requests = await friendService.getPendingRequests(req.user.id);
+        return res.status(200).json({ status: 'success', data: { requests } });
+    } catch (error) {
+        return res.status(500).json({ status: 'error', message: error.message });
+    }
+};
+
+exports.getSentRequests = async (req, res) => {
+    try {
+        const sentRequests = await friendService.getSentRequests(req.user.id);
+        return res.status(200).json({ status: 'success', data: { sentRequests } });
+    } catch (error) {
+        return res.status(500).json({ status: 'error', message: error.message });
+    }
+};
+
+exports.sendRequest = async (req, res) => {
+    try {
+        const recipientId = req.params.id || req.body.recipientId || req.body.targetId;
+        if (!recipientId) {
+            return res.status(400).json({ status: 'fail', message: 'Destinataire manquant.' });
+        }
+        const friendship = await friendService.sendFriendRequest(req.user.id, recipientId);
+        return res.status(201).json({ status: 'success', data: { friendship } });
+    } catch (error) {
+        return res.status(400).json({ status: 'fail', message: error.message });
+    }
+};
+
+exports.acceptRequest = async (req, res) => {
+    try {
+        const requestId = req.params.id || req.body.friendshipId || req.body.requestId;
+        const friendship = await friendService.acceptFriendRequest(req.user.id, requestId);
+        return res.status(200).json({ status: 'success', data: { friendship } });
+    } catch (error) {
+        return res.status(400).json({ status: 'fail', message: error.message });
+    }
+};
+
+exports.rejectRequest = async (req, res) => {
+    try {
+        const requestId = req.params.id || req.body.friendshipId || req.body.requestId;
+        await friendService.rejectFriendRequest(req.user.id, requestId);
+        return res.status(200).json({ status: 'success', message: 'Demande rejetée.' });
+    } catch (error) {
+        return res.status(400).json({ status: 'fail', message: error.message });
+    }
+};
+
 exports.search = async (req, res) => {
     try {
         const { query } = req.query;
-        if (!query || query.trim().length === 0) {
-            return res.status(200).json({ status: 'success', data: { users: [] } });
-        }
-
-        const users = await User.find({
-            login: { $regex: query, $options: 'i' },
-            _id: { $ne: req.user.id }
-        }).select('login avatar level rank isVip').limit(20);
-
+        const users = await friendService.searchUsers(req.user.id, query);
         return res.status(200).json({ status: 'success', data: { users } });
     } catch (error) {
         return res.status(500).json({ status: 'error', message: error.message });
@@ -103,17 +74,8 @@ exports.search = async (req, res) => {
 
 exports.blockUser = async (req, res) => {
     try {
-        const { id } = req.params;
-        await Friend.findOneAndUpdate(
-            {
-                $or: [
-                    { requester: req.user.id, recipient: id },
-                    { requester: id, recipient: req.user.id }
-                ]
-            },
-            { status: 'blocked', requester: req.user.id, recipient: id },
-            { upsert: true, new: true }
-        );
+        const targetId = req.params.id || req.body.targetId;
+        await friendService.blockUser(req.user.id, targetId);
         return res.status(200).json({ status: 'success', message: 'Utilisateur bloqué.' });
     } catch (error) {
         return res.status(500).json({ status: 'error', message: error.message });
