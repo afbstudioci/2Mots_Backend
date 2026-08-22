@@ -170,8 +170,8 @@ exports.deleteAccount = async (req, res) => {
         const Message = require('../models/Message');
 
         await Promise.all([
-            Friendship.deleteMany({ $or: [{ requester: userId }, { recipient: userId }] }),
-            UserMission.deleteMany({ userId }),
+            Friendship.deleteMany({ users: userId }),
+            UserMission.deleteMany({ user: userId }),
             Message.deleteMany({ $or: [{ sender: userId }, { recipient: userId }] }),
             User.findByIdAndDelete(userId)
         ]);
