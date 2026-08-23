@@ -25,20 +25,20 @@ const getBatch = async (req, res, next) => {
 
         let wordPairs = await WordPair.aggregate([
             { $match: { _id: { $nin: allExcludedIds }, isActive: true } },
-            { $sample: { size: 15 } }
+            { $sample: { size: 30 } }
         ]);
 
-        if (!wordPairs || wordPairs.length < 5) {
+        if (!wordPairs || wordPairs.length < 10) {
             wordPairs = await WordPair.aggregate([
                 { $match: { _id: { $nin: clientExcludeObjectIds }, isActive: true } },
-                { $sample: { size: 15 } }
+                { $sample: { size: 30 } }
             ]);
         }
 
         if (!wordPairs || wordPairs.length === 0) {
             wordPairs = await WordPair.aggregate([
                 { $match: { isActive: true } },
-                { $sample: { size: 15 } }
+                { $sample: { size: 30 } }
             ]);
         }
 
