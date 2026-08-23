@@ -71,14 +71,26 @@ const generateAndStoreWords = async () => {
         if (totalWords >= DB_WORD_LIMIT) return;
 
         const genAI = new GoogleGenerativeAI(geminiApiKey);
-        const model = genAI.getGenerativeModel({ model: 'gemini-1.5-flash' });
+        const candidateModels = ['gemini-1.5-flash-latest', 'gemini-2.0-flash', 'gemini-1.5-pro', 'gemini-1.5-flash'];
 
         for (const diff of difficulties) {
             if (dailyGeneratedCount >= DAILY_GEN_LIMIT) break;
 
             const prompt = buildGenerationPrompt(diff);
-            const result = await model.generateContent(prompt);
-            const rawText = result.response.text();
+            let rawText = null;
+
+            for (const mName of candidateModels) {
+                try {
+                    const modelInstance = genAI.getGenerativeModel({ model: mName });
+                    const result = await modelInstance.generateContent(prompt);
+                    rawText = result.response.text();
+                    if (rawText) break;
+                } catch (mErr) {
+                    // Essai du modèle suivant
+                }
+            }
+
+            if (!rawText) continue;
 
             let cleanJson = rawText.trim();
             if (cleanJson.startsWith('```json')) {

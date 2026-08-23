@@ -27,25 +27,7 @@ const shuffleArray = (array) => {
     return arr;
 };
 
-const FALLBACK_VERBS = [
-    'transmettre', 'ecouter', 'regarder', 'construire', 'decouvrir', 'voyager',
-    'proteger', 'rechercher', 'analyser', 'resoudre', 'partager', 'reflechir',
-    'comprendre', 'dessiner', 'ecrire', 'mesurer', 'assembler', 'trancher',
-    'ajuster', 'guider', 'ralentir', 'eclairer', 'nourrir', 'planifier'
-];
-
-const FALLBACK_NOUNS = [
-    'matiere', 'energie', 'surface', 'volume', 'contour', 'element',
-    'origine', 'alliage', 'reflet', 'signal', 'horizon', 'memoire',
-    'lumiere', 'passage', 'machine', 'symbole', 'fardeau', 'chaleur',
-    'cristal', 'vibration', 'parcours', 'mystere', 'structure', 'contact'
-];
-
-const FALLBACK_ADJ = [
-    'robuste', 'precis', 'lumineux', 'profond', 'naturel', 'compact',
-    'dense', 'fluide', 'stable', 'vif', 'intense', 'subtil',
-    'majeur', 'secret', 'lointain', 'complexe', 'pur', 'solide'
-];
+const { FALLBACK_VERBS, FALLBACK_NOUNS, FALLBACK_ADJ } = require('../utils/gameFallbacks');
 
 const detectGrammaticalType = (word, declaredType) => {
     if (declaredType && ['verbe', 'nom', 'adjectif'].includes(declaredType.toLowerCase())) {
@@ -269,10 +251,35 @@ const syncOfflineSession = async (userId, sessionData) => {
     return { synced: true, earnedKevs, totalKevs: user.kevs };
 };
 
+const claimChestReward = async (userId, gains) => {
+    const user = await User.findById(userId);
+    if (!user) throw createError('Utilisateur introuvable', 404);
+
+    user.kevyKeys = 0;
+    if (gains && typeof gains.kevs === 'number' && gains.kevs > 0) {
+        user.kevs = (user.kevs || 0) + gains.kevs;
+    }
+    await user.save();
+    return { kevyKeys: 0, kevs: user.kevs };
+};
+
+const syncUserKeys = async (userId, kevyKeys) => {
+    const user = await User.findById(userId);
+    if (!user) throw createError('Utilisateur introuvable', 404);
+
+    if (typeof kevyKeys === 'number' && kevyKeys >= 0 && kevyKeys <= 3) {
+        user.kevyKeys = kevyKeys;
+        await user.save();
+    }
+    return { kevyKeys: user.kevyKeys };
+};
+
 module.exports = {
     enrichPairsWithOptions,
     checkAnswerRealtime,
     useHint,
     validateFinalSession,
-    syncOfflineSession
+    syncOfflineSession,
+    claimChestReward,
+    syncUserKeys
 };

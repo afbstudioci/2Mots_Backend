@@ -7,7 +7,7 @@ exports.getAppConfig = async (req, res) => {
     try {
         const config = {
             versioning: {
-                latestVersionCode: parseInt(process.env.LATEST_VERSION_CODE, 10) || 15,
+                latestVersionCode: parseInt(process.env.LATEST_VERSION_CODE, 10) || 16,
                 minVersionCode: parseInt(process.env.MIN_VERSION_CODE, 10) || 1,
                 latestVersionName: process.env.LATEST_VERSION_NAME || "1.0.0",
                 forceUpdate: process.env.FORCE_UPDATE === 'true',

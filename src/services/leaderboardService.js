@@ -12,50 +12,35 @@ exports.fetchGlobalTopPlayers = async (limit = 20) => {
 };
 
 /**
- * Recupere les rivaux du classement mondial pour les alertes de depassement en direct
+ * Recupere les vrais rangs et rivaux du classement mondial depuis MongoDB pour les alertes en direct
  */
 exports.fetchNearbyRivals = async (userId, userBestScore = 0) => {
     try {
-        const higherRivals = await User.find({
-            _id: { $ne: userId },
-            isBanned: false,
-            bestScore: { $gt: Number(userBestScore) || 0 }
-        })
-        .select('login bestScore level avatar')
-        .sort({ bestScore: 1 })
-        .limit(6);
+        const allUsers = await User.find({ isBanned: false })
+            .select('_id login bestScore level xp avatar')
+            .sort({ level: -1, xp: -1, bestScore: -1 })
+            .limit(100);
 
-        if (higherRivals && higherRivals.length >= 3) {
-            return higherRivals.map(r => ({
-                pseudo: r.login || 'Joueur',
-                score: r.bestScore || 1,
-                level: r.level || 1
+        if (!allUsers || allUsers.length === 0) return { userRank: 1, rivals: [] };
+
+        const userIndex = allUsers.findIndex(u => String(u._id) === String(userId));
+        const currentUserRank = userIndex !== -1 ? userIndex + 1 : allUsers.length + 1;
+
+        const rivals = allUsers
+            .filter(u => String(u._id) !== String(userId))
+            .map((u) => ({
+                pseudo: u.login || 'Joueur',
+                score: u.bestScore || 0,
+                level: u.level || 1,
+                rank: allUsers.findIndex(x => String(x._id) === String(u._id)) + 1
             }));
-        }
 
-        const topPlayers = await User.find({
-            _id: { $ne: userId },
-            isBanned: false,
-            bestScore: { $gt: 0 }
-        })
-        .select('login bestScore level avatar')
-        .sort({ bestScore: 1 })
-        .limit(8);
-
-        if (topPlayers && topPlayers.length > 0) {
-            return topPlayers.map(r => ({
-                pseudo: r.login || 'Joueur',
-                score: r.bestScore || 1,
-                level: r.level || 1
-            }));
-        }
-    } catch {}
-
-    return [
-        { pseudo: 'Lucas', score: 5, level: 2 },
-        { pseudo: 'Sarah', score: 8, level: 3 },
-        { pseudo: 'Alexandre', score: 12, level: 4 },
-        { pseudo: 'Marc', score: 18, level: 5 },
-        { pseudo: 'Elena', score: 25, level: 6 }
-    ];
+        return {
+            userRank: currentUserRank,
+            rivals
+        };
+    } catch (err) {
+        console.error('[LEADERBOARD] Erreur calcul rangs réels:', err.message);
+        return { userRank: 1, rivals: [] };
+    }
 };

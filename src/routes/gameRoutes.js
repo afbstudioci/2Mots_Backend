@@ -12,6 +12,8 @@ router.post('/check', gameController.checkAnswer);
 router.post('/use-hint', gameController.useHint);
 router.post('/validate', gameController.validateSession);
 router.post('/end', gameController.validateSession);
+router.post('/chest-opened', gameController.claimChest);
+router.post('/sync-keys', gameController.syncKeys);
 router.post('/sync-offline', gameController.syncOffline);
 
 module.exports = router;

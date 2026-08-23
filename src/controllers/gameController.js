@@ -2,7 +2,6 @@
 const WordPair = require('../models/WordPair');
 const gameService = require('../services/gameService');
 const leaderboardService = require('../services/leaderboardService');
-
 const mongoose = require('mongoose');
 
 const getBatch = async (req, res, next) => {
@@ -43,13 +42,16 @@ const getBatch = async (req, res, next) => {
             ]);
         }
 
-        const rivals = await leaderboardService.fetchNearbyRivals(req.user?._id, req.user?.bestScore || 0);
+        const rivalData = await leaderboardService.fetchNearbyRivals(req.user?._id, req.user?.bestScore || 0);
+        const rivals = Array.isArray(rivalData) ? rivalData : (rivalData?.rivals || []);
+        const userRank = rivalData?.userRank || 1;
 
         if (!wordPairs || wordPairs.length === 0) {
             return res.status(200).json({
                 status: 'success',
                 data: [],
                 rivals,
+                userRank,
                 userStats: {
                     level: req.user.level,
                     xp: req.user.xp,
@@ -66,6 +68,7 @@ const getBatch = async (req, res, next) => {
             status: 'success',
             data: enrichedPairs,
             rivals,
+            userRank,
             userStats: {
                 level: req.user.level,
                 xp: req.user.xp,
@@ -83,10 +86,7 @@ const checkAnswer = async (req, res, next) => {
     try {
         const { wordPairId, answer, timeSpent } = req.body;
         const result = await gameService.checkAnswerRealtime(req.user._id, wordPairId, answer, timeSpent);
-        res.status(200).json({
-            status: 'success',
-            data: result
-        });
+        res.status(200).json({ status: 'success', data: result });
     } catch (error) {
         next(error);
     }
@@ -95,10 +95,7 @@ const checkAnswer = async (req, res, next) => {
 const useHint = async (req, res, next) => {
     try {
         const result = await gameService.useHint(req.user._id);
-        res.status(200).json({
-            status: 'success',
-            data: result
-        });
+        res.status(200).json({ status: 'success', data: result });
     } catch (error) {
         next(error);
     }
@@ -108,10 +105,27 @@ const validateSession = async (req, res, next) => {
     try {
         const { answers, score, kevyKeys, bonusKevs } = req.body;
         const result = await gameService.validateFinalSession(req.user._id, answers, score, kevyKeys, bonusKevs);
-        res.status(200).json({
-            status: 'success',
-            data: result
-        });
+        res.status(200).json({ status: 'success', data: result });
+    } catch (error) {
+        next(error);
+    }
+};
+
+const claimChest = async (req, res, next) => {
+    try {
+        const { gains } = req.body;
+        const result = await gameService.claimChestReward(req.user._id, gains);
+        res.status(200).json({ status: 'success', data: result });
+    } catch (error) {
+        next(error);
+    }
+};
+
+const syncKeys = async (req, res, next) => {
+    try {
+        const { kevyKeys } = req.body;
+        const result = await gameService.syncUserKeys(req.user._id, kevyKeys);
+        res.status(200).json({ status: 'success', data: result });
     } catch (error) {
         next(error);
     }
@@ -120,10 +134,7 @@ const validateSession = async (req, res, next) => {
 const syncOffline = async (req, res, next) => {
     try {
         const result = await gameService.syncOfflineSession(req.user._id, req.body);
-        res.status(200).json({
-            status: 'success',
-            data: result
-        });
+        res.status(200).json({ status: 'success', data: result });
     } catch (error) {
         next(error);
     }
@@ -134,5 +145,7 @@ module.exports = {
     checkAnswer,
     useHint,
     validateSession,
+    claimChest,
+    syncKeys,
     syncOffline
 };
