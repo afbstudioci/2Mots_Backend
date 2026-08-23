@@ -45,6 +45,7 @@ const getBatch = async (req, res, next) => {
         const rivalData = await leaderboardService.fetchNearbyRivals(req.user?._id, req.user?.bestScore || 0);
         const rivals = Array.isArray(rivalData) ? rivalData : (rivalData?.rivals || []);
         const userRank = rivalData?.userRank || 1;
+        const threatBehind = rivalData?.threatBehind || null;
 
         if (!wordPairs || wordPairs.length === 0) {
             return res.status(200).json({
@@ -52,6 +53,7 @@ const getBatch = async (req, res, next) => {
                 data: [],
                 rivals,
                 userRank,
+                threatBehind,
                 userStats: {
                     level: req.user.level,
                     xp: req.user.xp,
@@ -69,6 +71,7 @@ const getBatch = async (req, res, next) => {
             data: enrichedPairs,
             rivals,
             userRank,
+            threatBehind,
             userStats: {
                 level: req.user.level,
                 xp: req.user.xp,
