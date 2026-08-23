@@ -63,6 +63,9 @@ const enrichPairsWithOptions = async (wordPairs) => {
             distractors[1]
         ]);
 
+        // Rareté équilibrée : 1 clé dorée tous les 18 mots environ
+        const hasKey = i % 18 === 7;
+
         enrichedList.push({
             _id: rawPair._id,
             word1: rawPair.word1,
@@ -71,7 +74,8 @@ const enrichPairsWithOptions = async (wordPairs) => {
             expectedType: gramType,
             difficulty: rawPair.difficulty,
             exactMatch: rawPair.exactMatch || [correctAnswer],
-            options: formattedOptions
+            options: formattedOptions,
+            hasKey
         });
     }
 
