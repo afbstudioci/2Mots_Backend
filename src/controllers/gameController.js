@@ -106,8 +106,18 @@ const useHint = async (req, res, next) => {
 
 const validateSession = async (req, res, next) => {
     try {
-        const { answers, score, kevyKeys, bonusKevs } = req.body;
-        const result = await gameService.validateFinalSession(req.user._id, answers, score, kevyKeys, bonusKevs);
+        const { answers, score, kevyKeys, bonusKevs, level, xp } = req.body;
+        const result = await gameService.validateFinalSession(req.user._id, answers, score, kevyKeys, bonusKevs, level, xp);
+        res.status(200).json({ status: 'success', data: result });
+    } catch (error) {
+        next(error);
+    }
+};
+
+const syncLevel = async (req, res, next) => {
+    try {
+        const { level, xp, kevs } = req.body;
+        const result = await gameService.syncLevel(req.user._id, level, xp, kevs);
         res.status(200).json({ status: 'success', data: result });
     } catch (error) {
         next(error);
@@ -148,6 +158,7 @@ module.exports = {
     checkAnswer,
     useHint,
     validateSession,
+    syncLevel,
     claimChest,
     syncKeys,
     syncOffline

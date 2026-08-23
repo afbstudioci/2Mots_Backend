@@ -63,8 +63,8 @@ const enrichPairsWithOptions = async (wordPairs) => {
             distractors[1]
         ]);
 
-        // Rareté équilibrée : 1 clé dorée tous les 18 mots environ
-        const hasKey = i % 18 === 7;
+        // Rareté prestigieuse : 1 seule clé mystère maximum par lot de 30 mots (à l'énigme 18)
+        const hasKey = i === 17;
 
         enrichedList.push({
             _id: rawPair._id,
@@ -225,8 +225,38 @@ const validateFinalSession = async (userId, answers, directScore, kevyKeys, bonu
         user.kevs = (user.kevs || 0) + bonusKevs;
     }
 
+    if (typeof clientLevel === 'number' && clientLevel > (user.level || 1)) {
+        user.level = clientLevel;
+        if (typeof clientXp === 'number') user.xp = clientXp;
+    } else if (typeof clientLevel === 'number' && clientLevel === (user.level || 1)) {
+        if (typeof clientXp === 'number' && clientXp > (user.xp || 0)) {
+            user.xp = clientXp;
+        }
+    }
+
     await user.save();
-    return { totalScore: sessionScore, bestScore: user.bestScore, corrections, kevs: user.kevs, kevyKeys: user.kevyKeys };
+    return {
+        totalScore: sessionScore,
+        bestScore: user.bestScore,
+        corrections,
+        kevs: user.kevs,
+        kevyKeys: user.kevyKeys,
+        level: user.level,
+        xp: user.xp
+    };
+};
+
+const syncLevel = async (userId, level, xp, kevs) => {
+    const user = await User.findById(userId);
+    if (!user) throw createError('Utilisateur introuvable', 404);
+
+    if (typeof level === 'number' && level >= (user.level || 1)) {
+        user.level = level;
+        if (typeof xp === 'number') user.xp = xp;
+        if (typeof kevs === 'number' && kevs > (user.kevs || 0)) user.kevs = kevs;
+        await user.save();
+    }
+    return { level: user.level, xp: user.xp, kevs: user.kevs };
 };
 
 const syncOfflineSession = async (userId, sessionData) => {
@@ -283,6 +313,7 @@ module.exports = {
     checkAnswerRealtime,
     useHint,
     validateFinalSession,
+    syncLevel,
     syncOfflineSession,
     claimChestReward,
     syncUserKeys
