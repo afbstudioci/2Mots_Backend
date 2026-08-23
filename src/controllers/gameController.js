@@ -1,70 +1,39 @@
 //src/controllers/gameController.js
 const WordPair = require('../models/WordPair');
 const gameService = require('../services/gameService');
+const vaultService = require('../services/vaultService');
 const leaderboardService = require('../services/leaderboardService');
 const mongoose = require('mongoose');
 
 const getBatch = async (req, res, next) => {
     try {
         const excludeQuery = req.query.exclude ? req.query.exclude.split(',').filter(Boolean) : [];
-        const clientExcludeObjectIds = excludeQuery
-            .map(id => {
-                try { return new mongoose.Types.ObjectId(id); } catch { return null; }
-            })
-            .filter(Boolean);
+        const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
+        const played30Days = [
+            ...(req.user?.playedWords || [])
+                .filter(pw => pw.cooldownUntil && new Date(pw.cooldownUntil) > thirtyDaysAgo)
+                .map(pw => String(pw.word)),
+            ...excludeQuery
+        ];
 
-        const playedWordIds = (req.user?.playedWords || [])
-            .filter(pw => pw.cooldownUntil && new Date() < new Date(pw.cooldownUntil))
-            .map(pw => pw.word);
+        // 1. Tirage prioritaire ultra-rapide parmi la réserve infinie (par palier de niveau)
+        let enrichedPairs = await vaultService.getEnigmaBatch(req.user?.level || 1, played30Days, 30);
 
-        const allExcludedIds = [...new Set([...playedWordIds.map(String), ...clientExcludeObjectIds.map(String)])]
-            .map(id => {
-                try { return new mongoose.Types.ObjectId(id); } catch { return null; }
-            })
-            .filter(Boolean);
-
-        let wordPairs = await WordPair.aggregate([
-            { $match: { _id: { $nin: allExcludedIds }, isActive: true } },
-            { $sample: { size: 30 } }
-        ]);
-
-        if (!wordPairs || wordPairs.length < 10) {
-            wordPairs = await WordPair.aggregate([
-                { $match: { _id: { $nin: clientExcludeObjectIds }, isActive: true } },
-                { $sample: { size: 30 } }
-            ]);
-        }
-
-        if (!wordPairs || wordPairs.length === 0) {
-            wordPairs = await WordPair.aggregate([
+        // 2. Si la réserve distante est en chargement initial, fallback sur WordPair de MongoDB
+        if (!enrichedPairs || enrichedPairs.length === 0) {
+            let wordPairs = await WordPair.aggregate([
                 { $match: { isActive: true } },
                 { $sample: { size: 30 } }
             ]);
+            if (wordPairs && wordPairs.length > 0) {
+                enrichedPairs = await gameService.enrichPairsWithOptions(wordPairs);
+            }
         }
 
         const rivalData = await leaderboardService.fetchNearbyRivals(req.user?._id, req.user?.bestScore || 0);
         const rivals = Array.isArray(rivalData) ? rivalData : (rivalData?.rivals || []);
         const userRank = rivalData?.userRank || 1;
         const threatBehind = rivalData?.threatBehind || null;
-
-        if (!wordPairs || wordPairs.length === 0) {
-            return res.status(200).json({
-                status: 'success',
-                data: [],
-                rivals,
-                userRank,
-                threatBehind,
-                userStats: {
-                    level: req.user.level,
-                    xp: req.user.xp,
-                    xpNeeded: 3 + req.user.level * 2,
-                    kevs: req.user.kevs,
-                    kevyKeys: req.user.kevyKeys || 0
-                }
-            });
-        }
-
-        const enrichedPairs = await gameService.enrichPairsWithOptions(wordPairs);
 
         res.status(200).json({
             status: 'success',

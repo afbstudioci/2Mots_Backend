@@ -4,7 +4,6 @@ const { Server } = require('socket.io');
 const app = require('./app');
 const connectDB = require('./config/db');
 const { port } = require('./config/env');
-const initAiWorker = require('./workers/aiWordGenerator');
 const chatService = require('./services/chatService');
 
 const server = http.createServer(app);
@@ -100,10 +99,12 @@ io.on('connection', (socket) => {
     });
 });
 
+const vaultService = require('./services/vaultService');
+
 connectDB().then(() => {
     server.listen(port, () => {
         console.log(`[SERVEUR] Démarré sur le port ${port} avec Socket.io prêt`);
-        initAiWorker();
+        vaultService.preloadAllTiers();
     });
 }).catch(err => {
     console.error('[SERVEUR] Échec critique au démarrage :', err);
