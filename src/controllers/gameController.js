@@ -1,6 +1,7 @@
 //src/controllers/gameController.js
 const WordPair = require('../models/WordPair');
 const gameService = require('../services/gameService');
+const leaderboardService = require('../services/leaderboardService');
 
 const mongoose = require('mongoose');
 
@@ -42,10 +43,13 @@ const getBatch = async (req, res, next) => {
             ]);
         }
 
+        const rivals = await leaderboardService.fetchNearbyRivals(req.user?._id, req.user?.bestScore || 0);
+
         if (!wordPairs || wordPairs.length === 0) {
             return res.status(200).json({
                 status: 'success',
                 data: [],
+                rivals,
                 userStats: {
                     level: req.user.level,
                     xp: req.user.xp,
@@ -61,6 +65,7 @@ const getBatch = async (req, res, next) => {
         res.status(200).json({
             status: 'success',
             data: enrichedPairs,
+            rivals,
             userStats: {
                 level: req.user.level,
                 xp: req.user.xp,
