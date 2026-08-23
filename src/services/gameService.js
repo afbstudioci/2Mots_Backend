@@ -198,7 +198,7 @@ const useHint = async (userId) => {
     return { kevs: user.kevs };
 };
 
-const validateFinalSession = async (userId, answers, directScore) => {
+const validateFinalSession = async (userId, answers, directScore, kevyKeys, bonusKevs) => {
     const user = await User.findById(userId);
     if (!user) throw createError('Utilisateur introuvable', 404);
 
@@ -231,8 +231,16 @@ const validateFinalSession = async (userId, answers, directScore) => {
         user.bestScore = sessionScore;
     }
 
+    if (typeof kevyKeys === 'number' && kevyKeys >= 0 && kevyKeys <= 3) {
+        user.kevyKeys = kevyKeys;
+    }
+
+    if (typeof bonusKevs === 'number' && bonusKevs > 0) {
+        user.kevs = (user.kevs || 0) + bonusKevs;
+    }
+
     await user.save();
-    return { totalScore: sessionScore, bestScore: user.bestScore, corrections, kevs: user.kevs };
+    return { totalScore: sessionScore, bestScore: user.bestScore, corrections, kevs: user.kevs, kevyKeys: user.kevyKeys };
 };
 
 const syncOfflineSession = async (userId, sessionData) => {

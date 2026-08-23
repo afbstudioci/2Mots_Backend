@@ -50,7 +50,8 @@ const getBatch = async (req, res, next) => {
                     level: req.user.level,
                     xp: req.user.xp,
                     xpNeeded: 3 + req.user.level * 2,
-                    kevs: req.user.kevs
+                    kevs: req.user.kevs,
+                    kevyKeys: req.user.kevyKeys || 0
                 }
             });
         }
@@ -64,7 +65,8 @@ const getBatch = async (req, res, next) => {
                 level: req.user.level,
                 xp: req.user.xp,
                 xpNeeded: 3 + req.user.level * 2,
-                kevs: req.user.kevs
+                kevs: req.user.kevs,
+                kevyKeys: req.user.kevyKeys || 0
             }
         });
     } catch (error) {
@@ -99,8 +101,8 @@ const useHint = async (req, res, next) => {
 
 const validateSession = async (req, res, next) => {
     try {
-        const { answers, score } = req.body;
-        const result = await gameService.validateFinalSession(req.user._id, answers, score);
+        const { answers, score, kevyKeys, bonusKevs } = req.body;
+        const result = await gameService.validateFinalSession(req.user._id, answers, score, kevyKeys, bonusKevs);
         res.status(200).json({
             status: 'success',
             data: result
