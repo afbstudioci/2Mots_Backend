@@ -16,7 +16,7 @@ const TIER_MAPPING = [
 const inMemoryVault = new Map();
 const isDownloading = new Map();
 
-// Secours logique immédiat
+// Secours logique d'extrême urgence si le réseau est totalement inaccessible
 const FALLBACK_LOGICAL = [
   [1001, 'SOLEIL', 'PLUIE', 'ARC-EN-CIEL', 'Spectre colore qui apparait dans le ciel', 1, 'nom', 'ORAGE', 'NUAGE'],
   [1002, 'VOLANT', 'PLUME', 'BADMINTON', 'Sport de raquette rapide et aerien', 2, 'nom', 'TENNIS', 'SQUASH'],
@@ -71,33 +71,58 @@ const fetchUrlBuffer = async (targetUrl, maxRedirects = 5) => {
   });
 };
 
+const parseBuffer = (buf) => {
+  if (!buf || buf.length === 0) return null;
+  if (buf[0] === 0x1f && buf[1] === 0x8b) {
+    try {
+      const decompressed = zlib.gunzipSync(buf).toString('utf-8');
+      return JSON.parse(decompressed);
+    } catch {
+      // Ignorer
+    }
+  }
+  try {
+    return JSON.parse(buf.toString('utf-8'));
+  } catch {
+    try {
+      const decompressed = zlib.gunzipSync(buf).toString('utf-8');
+      return JSON.parse(decompressed);
+    } catch {
+      return null;
+    }
+  }
+};
+
 const downloadAndCacheTier = async (tier) => {
   if (inMemoryVault.has(tier.name) || isDownloading.get(tier.name)) return;
   isDownloading.set(tier.name, true);
 
+  const candidateUrls = [
+    `${RELEASE_URL_BASE}/${tier.name}.json.gz`,
+    `${RELEASE_URL_BASE}/${tier.name}.json`,
+    `${RAW_URL_BASE}/${tier.name}.json.gz`,
+    `${RAW_URL_BASE}/${tier.name}.json`,
+    `https://raw.githubusercontent.com/afbstudioci/2mots-vault/main/${tier.name}.json.gz`,
+    `https://raw.githubusercontent.com/afbstudioci/2mots-vault/main/${tier.name}.json`
+  ];
+
   try {
-    let buffer = null;
-    try {
-      buffer = await fetchUrlBuffer(`${RELEASE_URL_BASE}/${tier.name}.json.gz`);
-    } catch {
-      buffer = await fetchUrlBuffer(`${RAW_URL_BASE}/${tier.name}.json.gz`);
-    }
-
-    if (buffer) {
-      const decompressed = zlib.gunzipSync(buffer).toString('utf-8');
-      const parsed = JSON.parse(decompressed);
-
-      if (Array.isArray(parsed) && parsed.length > 0) {
-        // Échantillon actif de 15 000 énigmes en RAM
-        const sampled = shuffleArray(parsed).slice(0, 15000);
-        inMemoryVault.set(tier.name, sampled);
-        console.log(`[VAULT] Pack ${tier.name} charge (${parsed.length} source, ${sampled.length} en RAM).`);
-        return;
+    for (const url of candidateUrls) {
+      try {
+        const buffer = await fetchUrlBuffer(url);
+        const parsed = parseBuffer(buffer);
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          inMemoryVault.set(tier.name, parsed);
+          console.log(`[VAULT] Succès: Tier ${tier.name} chargé (${parsed.length} énigmes réelles depuis ${url}).`);
+          return;
+        }
+      } catch {
+        // Tentative sur l'URL suivante
       }
     }
-    throw new Error('Flux vide');
+    throw new Error('Aucune source distante disponible');
   } catch (err) {
-    console.warn(`[VAULT] Impossible de charger ${tier.name} (${err.message}). Utilisation fallback.`);
+    console.warn(`[VAULT] Impossible de charger ${tier.name} (${err.message}). Utilisation fallback secours.`);
     const fallback = FALLBACK_LOGICAL.filter(item => Math.floor(item[0] / 1000) === tier.id);
     inMemoryVault.set(tier.name, fallback.length > 0 ? fallback : FALLBACK_LOGICAL);
   } finally {
@@ -119,25 +144,28 @@ exports.getEnigmaBatch = async (userLevel = 1, playedIds30Days = [], batchSize =
   const excludedSet = new Set(playedIds30Days.map(String));
   let available = pool.filter(item => !excludedSet.has(String(item[0])) && !excludedSet.has(`vlt_${item[0]}`));
 
-  if (available.length < batchSize) {
+  // Si le joueur a épuisé les dizaines de milliers d'énigmes de son palier, on repart sur le pool complet
+  if (available.length === 0) {
     available = pool;
   }
 
   const picked = shuffleArray(available).slice(0, batchSize);
 
-  // Clé dorée : Rare (25% de chance par partie) et position aléatoire entre la 5e et la 25e énigme
+  // Clé dorée : 25% de chance par partie, position aléatoire
   const shouldSpawnKey = Math.random() < 0.25;
   const keyPosition = shouldSpawnKey ? (Math.floor(Math.random() * (picked.length - 8)) + 4) : -1;
 
   return picked.map((item, pos) => {
     const [id, word1, word2, answer, clue, difficulty, type, dist1, dist2] = item;
+    const rawType = String(type || '').toLowerCase();
+    const expectedType = rawType.startsWith('v') ? 'verbe' : (rawType.startsWith('adj') ? 'adjectif' : 'nom');
     return {
       _id: `vlt_${id}`,
       numericId: id,
       word1,
       word2,
       clue: clue || "Quel point commun les relie ?",
-      expectedType: type === 'v' ? 'verbe' : (type === 'adj' ? 'adjectif' : 'nom'),
+      expectedType,
       difficulty: difficulty || 2,
       exactMatch: [answer],
       options: shuffleArray([answer, dist1 || 'Choix A', dist2 || 'Choix B']),
@@ -152,12 +180,14 @@ exports.findEnigma = (enigmaId) => {
     const found = pool.find(item => item[0] === numId);
     if (found) {
       const [id, word1, word2, answer, clue, difficulty, type, dist1, dist2] = found;
+      const rawType = String(type || '').toLowerCase();
+      const expectedType = rawType.startsWith('v') ? 'verbe' : (rawType.startsWith('adj') ? 'adjectif' : 'nom');
       return {
         _id: `vlt_${id}`,
         word1,
         word2,
         clue: clue || "Quel point commun les relie ?",
-        expectedType: type === 'v' ? 'verbe' : (type === 'adj' ? 'adjectif' : 'nom'),
+        expectedType,
         difficulty: difficulty || 2,
         exactMatch: [answer],
         options: [answer, dist1, dist2]
