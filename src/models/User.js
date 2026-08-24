@@ -56,8 +56,8 @@ const userSchema = new mongoose.Schema({
     },
     playedWords: [{
         word: {
-            type: mongoose.Schema.Types.ObjectId,
-            ref: 'WordPair'
+            type: String,
+            required: true
         },
         cooldownUntil: {
             type: Date,

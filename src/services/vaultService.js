@@ -146,6 +146,27 @@ exports.getEnigmaBatch = async (userLevel = 1, playedIds30Days = [], batchSize =
   });
 };
 
+exports.findEnigma = (enigmaId) => {
+  const numId = Number(String(enigmaId).replace('vlt_', ''));
+  for (const pool of inMemoryVault.values()) {
+    const found = pool.find(item => item[0] === numId);
+    if (found) {
+      const [id, word1, word2, answer, clue, difficulty, type, dist1, dist2] = found;
+      return {
+        _id: `vlt_${id}`,
+        word1,
+        word2,
+        clue: clue || "Quel point commun les relie ?",
+        expectedType: type === 'v' ? 'verbe' : (type === 'adj' ? 'adjectif' : 'nom'),
+        difficulty: difficulty || 2,
+        exactMatch: [answer],
+        options: [answer, dist1, dist2]
+      };
+    }
+  }
+  return null;
+};
+
 exports.preloadAllTiers = () => {
   for (const tier of TIER_MAPPING) {
     downloadAndCacheTier(tier);
