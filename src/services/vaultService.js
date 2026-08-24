@@ -99,15 +99,23 @@ const downloadAndCacheTier = async (tier) => {
   if (isDownloading.get(tier.name)) return;
   isDownloading.set(tier.name, true);
 
-  // 1. Chargement instantané depuis le disque local si présent
+  // 1. Chargement instantané depuis le disque local si présent (200 000 énigmes)
   try {
-    const localPath = path.join(__dirname, '..', 'data', 'vault', `${tier.name}.json`);
-    if (fs.existsSync(localPath)) {
-      const raw = fs.readFileSync(localPath, 'utf-8');
-      const parsed = JSON.parse(raw);
-      if (Array.isArray(parsed) && parsed.length > 0) {
-        inMemoryVault.set(tier.name, parsed);
-        console.log(`[VAULT] Succès: Tier ${tier.name} chargé en mémoire locale (${parsed.length} énigmes réelles).`);
+    const candidateLocalPaths = [
+      path.join(__dirname, '..', '..', 'vault_packs', `${tier.name}.json.gz`),
+      path.join(__dirname, '..', '..', 'vault_packs', `${tier.name}.json`),
+      path.join(__dirname, '..', 'data', 'vault', `${tier.name}.json.gz`),
+      path.join(__dirname, '..', 'data', 'vault', `${tier.name}.json`)
+    ];
+    for (const localPath of candidateLocalPaths) {
+      if (fs.existsSync(localPath)) {
+        const rawBuf = fs.readFileSync(localPath);
+        const parsed = parseBuffer(rawBuf);
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          inMemoryVault.set(tier.name, parsed);
+          console.log(`[VAULT] Succès: Tier ${tier.name} chargé en local (${parsed.length} énigmes réelles).`);
+          break;
+        }
       }
     }
   } catch (e) {
@@ -220,3 +228,9 @@ exports.preloadAllTiers = () => {
     downloadAndCacheTier(tier);
   }
 };
+
+// Synchronisation automatique silencieuse toutes les 12 heures
+setInterval(() => {
+  exports.preloadAllTiers();
+}, 12 * 60 * 60 * 1000);
+
