@@ -30,6 +30,13 @@ const getBatch = async (req, res, next) => {
             }
         }
 
+        // 3. Verrouillage préventif immédiat : Dès que les 30 énigmes sont distribuées au joueur,
+        // elles sont gravées dans l'historique 30 jours, même en cas de déconnexion ou crash !
+        if (enrichedPairs && enrichedPairs.length > 0 && req.user) {
+            gameService.recordPlayedWords(req.user, enrichedPairs.map(p => p._id));
+            await req.user.save();
+        }
+
         const rivalData = await leaderboardService.fetchNearbyRivals(req.user?._id, req.user?.bestScore || 0);
         const rivals = Array.isArray(rivalData) ? rivalData : (rivalData?.rivals || []);
         const userRank = rivalData?.userRank || 1;

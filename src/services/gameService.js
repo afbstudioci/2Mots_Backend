@@ -208,6 +208,7 @@ const syncUserKeys = async (userId, kevyKeys) => {
 };
 
 module.exports = {
+    recordPlayedWords,
     enrichPairsWithOptions,
     checkAnswerRealtime,
     useHint,
