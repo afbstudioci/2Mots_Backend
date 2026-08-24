@@ -42,7 +42,17 @@ const getTierForLevel = (level = 1) => {
   return found || TIER_MAPPING[0];
 };
 
-const fetchUrlBuffer = (targetUrl, maxRedirects = 5) => {
+const fetchUrlBuffer = async (targetUrl, maxRedirects = 5) => {
+  if (typeof fetch === 'function') {
+    const res = await fetch(targetUrl, {
+      headers: { 'User-Agent': '2Mots-Server' },
+      redirect: 'follow'
+    });
+    if (!res.ok) throw new Error(`HTTP ${res.status} sur ${targetUrl}`);
+    const arrayBuffer = await res.arrayBuffer();
+    return Buffer.from(arrayBuffer);
+  }
+
   return new Promise((resolve, reject) => {
     if (maxRedirects <= 0) return reject(new Error('Trop de redirections'));
     const client = targetUrl.startsWith('https') ? https : http;
@@ -78,15 +88,16 @@ const downloadAndCacheTier = async (tier) => {
       const parsed = JSON.parse(decompressed);
 
       if (Array.isArray(parsed) && parsed.length > 0) {
-        // Échantillon actif de 10 000 énigmes en RAM pour préserver la mémoire (< 4 Mo)
-        const sampled = shuffleArray(parsed).slice(0, 10000);
+        // Échantillon actif de 15 000 énigmes en RAM
+        const sampled = shuffleArray(parsed).slice(0, 15000);
         inMemoryVault.set(tier.name, sampled);
-        console.log(`[VAULT] Pack ${tier.name} charge (Total source: ${parsed.length} enigmes, Echantillon actif RAM: ${sampled.length}).`);
+        console.log(`[VAULT] Pack ${tier.name} charge (${parsed.length} source, ${sampled.length} en RAM).`);
         return;
       }
     }
     throw new Error('Flux vide');
   } catch (err) {
+    console.warn(`[VAULT] Impossible de charger ${tier.name} (${err.message}). Utilisation fallback.`);
     const fallback = FALLBACK_LOGICAL.filter(item => Math.floor(item[0] / 1000) === tier.id);
     inMemoryVault.set(tier.name, fallback.length > 0 ? fallback : FALLBACK_LOGICAL);
   } finally {
@@ -108,9 +119,11 @@ exports.getEnigmaBatch = async (userLevel = 1, playedIds30Days = [], batchSize =
   const excludedSet = new Set(playedIds30Days.map(String));
   let available = pool.filter(item => !excludedSet.has(String(item[0])) && !excludedSet.has(`vlt_${item[0]}`));
 
-  if (available.length < 5) {
+  if (available.length < batchSize) {
     available = pool;
   }
+
+  const picked = shuffleArray(available).slice(0, batchSize);
 
   // Clé dorée : Rare (25% de chance par partie) et position aléatoire entre la 5e et la 25e énigme
   const shouldSpawnKey = Math.random() < 0.25;
