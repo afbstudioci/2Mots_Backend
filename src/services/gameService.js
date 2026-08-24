@@ -116,7 +116,7 @@ const checkAnswerRealtime = async (userId, wordPairId, userAnswer, timeSpent) =>
         isFastCombo = timeSpent <= 3;
         earnedKevs = isFastCombo ? 3 : 1;
         user.kevs = (user.kevs || 0) + earnedKevs;
-        user.xp += isFastCombo ? 2 : 1;
+        user.xp = (user.xp || 0) + (isFastCombo ? 2 : 1);
         currentXp = user.xp;
         const enigmasNeeded = 3 + user.level * 2;
         if (user.xp >= enigmasNeeded) {
@@ -133,13 +133,28 @@ const checkAnswerRealtime = async (userId, wordPairId, userAnswer, timeSpent) =>
     }
 
     recordPlayedWords(user, [resolvedPair._id]);
+
+    // Sécurisation atomique : ne jamais écraser un level supérieur enregistré en parallèle
+    const latest = await User.findById(userId).select('level xp kevs');
+    if (latest) {
+        if (latest.level > user.level) {
+            user.level = latest.level;
+            user.xp = latest.xp;
+        } else if (latest.level === user.level && latest.xp > user.xp) {
+            user.xp = latest.xp;
+        }
+        if (latest.kevs > user.kevs) {
+            user.kevs = latest.kevs;
+        }
+    }
+
     await user.save();
     const officialAnswer = (resolvedPair.exactMatch && resolvedPair.exactMatch[0]) || resolvedPair.word1;
 
     return {
         isCorrect, correctAnswer: officialAnswer, points, accuracy, timeWon, earnedKevs,
-        isFastCombo, totalKevs: user.kevs, leveledUp, newLevel, currentXp,
-        xpNeeded: 3 + newLevel * 2, logicalHint: resolvedPair.clue
+        isFastCombo, totalKevs: user.kevs, leveledUp, newLevel: user.level, currentXp: user.xp,
+        xpNeeded: 3 + user.level * 2, logicalHint: resolvedPair.clue
     };
 };
 
@@ -183,7 +198,7 @@ const validateFinalSession = async (userId, answers, directScore, kevyKeys, bonu
 
     if (typeof clientLevel === 'number' && clientLevel > (user.level || 1)) {
         user.level = clientLevel;
-        if (typeof clientXp === 'number') user.xp = clientXp;
+        user.xp = typeof clientXp === 'number' ? clientXp : 0;
     } else if (typeof clientLevel === 'number' && clientLevel === (user.level || 1) && typeof clientXp === 'number' && clientXp > (user.xp || 0)) {
         user.xp = clientXp;
     }
@@ -196,14 +211,22 @@ const validateFinalSession = async (userId, answers, directScore, kevyKeys, bonu
 };
 
 const syncLevel = async (userId, level, xp, kevs) => {
-    const user = await User.findById(userId);
-    if (!user) throw createError('Utilisateur introuvable', 404);
-    if (typeof level === 'number' && level >= (user.level || 1)) {
-        user.level = level;
-        if (typeof xp === 'number') user.xp = xp;
-        if (typeof kevs === 'number' && kevs > (user.kevs || 0)) user.kevs = kevs;
-        await user.save();
-    }
+    if (typeof level !== 'number' || level < 1) return;
+    const updated = await User.findOneAndUpdate(
+        {
+            _id: userId,
+            $or: [
+                { level: { $lt: level } },
+                { level: level, xp: { $lte: xp || 0 } }
+            ]
+        },
+        {
+            $set: { level, xp: xp || 0 },
+            ...(typeof kevs === 'number' && kevs > 0 ? { $max: { kevs } } : {})
+        },
+        { new: true }
+    );
+    const user = updated || await User.findById(userId);
     return { level: user.level, xp: user.xp, kevs: user.kevs };
 };
 
