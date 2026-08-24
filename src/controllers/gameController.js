@@ -8,29 +8,18 @@ const mongoose = require('mongoose');
 const getBatch = async (req, res, next) => {
     try {
         const excludeQuery = req.query.exclude ? req.query.exclude.split(',').filter(Boolean) : [];
-        const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
+        const now = new Date();
         const played30Days = [
             ...(req.user?.playedWords || [])
-                .filter(pw => pw.cooldownUntil && new Date(pw.cooldownUntil) > thirtyDaysAgo)
+                .filter(pw => pw.cooldownUntil && new Date(pw.cooldownUntil) > now)
                 .map(pw => String(pw.word)),
             ...excludeQuery
         ];
 
-        // 1. Tirage prioritaire ultra-rapide parmi la réserve infinie (par palier de niveau)
+        // 1. Tirage prioritaire ultra-rapide parmi la réserve authentique (par palier de niveau)
         let enrichedPairs = await vaultService.getEnigmaBatch(req.user?.level || 1, played30Days, 30);
 
-        // 2. Si la réserve distante est en chargement initial, fallback sur WordPair de MongoDB
-        if (!enrichedPairs || enrichedPairs.length === 0) {
-            let wordPairs = await WordPair.aggregate([
-                { $match: { isActive: true } },
-                { $sample: { size: 30 } }
-            ]);
-            if (wordPairs && wordPairs.length > 0) {
-                enrichedPairs = await gameService.enrichPairsWithOptions(wordPairs);
-            }
-        }
-
-        // 3. Verrouillage préventif immédiat : Dès que les 30 énigmes sont distribuées au joueur,
+        // 2. Verrouillage préventif immédiat : Dès que les 30 énigmes sont distribuées au joueur,
         // elles sont gravées dans l'historique 30 jours, même en cas de déconnexion ou crash !
         if (enrichedPairs && enrichedPairs.length > 0 && req.user) {
             gameService.recordPlayedWords(req.user, enrichedPairs.map(p => p._id));

@@ -1,4 +1,6 @@
 //src/services/vaultService.js
+const fs = require('fs');
+const path = require('path');
 const https = require('https');
 const http = require('http');
 const zlib = require('zlib');
@@ -16,16 +18,16 @@ const TIER_MAPPING = [
 const inMemoryVault = new Map();
 const isDownloading = new Map();
 
-// Secours logique d'extrême urgence si le réseau est totalement inaccessible
+// Secours logique d'extrême urgence si le réseau et le disque sont inaccessibles
 const FALLBACK_LOGICAL = [
-  [1001, 'SOLEIL', 'PLUIE', 'ARC-EN-CIEL', 'Spectre colore qui apparait dans le ciel', 1, 'nom', 'ORAGE', 'NUAGE'],
-  [1002, 'VOLANT', 'PLUME', 'BADMINTON', 'Sport de raquette rapide et aerien', 2, 'nom', 'TENNIS', 'SQUASH'],
-  [1003, 'AIGUILLE', 'TISSU', 'COUDRE', 'Assembler des pieces d etoffe', 1, 'v', 'TISSER', 'BRODER'],
-  [2001, 'CHAMPAGNE', 'COUPE', 'PETILLER', 'Formation de fines bulles effervescentes', 4, 'v', 'MOUSSER', 'TRINQUER'],
-  [2002, 'BOUSSOLE', 'NORD', 'ORIENTER', 'Determiner la bonne trajectoire', 5, 'v', 'GUIDER', 'POINTER'],
-  [3001, 'SERPENT', 'EGYPTE', 'PHARAON', 'Souverain antique protege par l ureeus', 7, 'nom', 'PYRAMIDE', 'PAPYRUS'],
-  [3002, 'ECHO', 'SILENCE', 'ROMPRE', 'Mettre fin brusquement au calme ambiant', 7, 'v', 'TROUBLER', 'RESONNER'],
-  [4001, 'SECRET', 'CADENAS', 'INVIOLABLE', 'Que nulle force ne peut forcer ni alterer', 9, 'adj', 'HERMETIQUE', 'IMPENETRABLE']
+  [1001, 'TERRE', 'LUNE', 'ORBITER', 'Mouvement perpetuel autour d un astre', 1, 'verbe', 'TOURNER', 'GRAVITER'],
+  [1002, 'SOLEIL', 'TERRE', 'CHAUFFER', 'Action thermique du rayonnement stellaire', 1, 'verbe', 'RAYONNER', 'ECLAIRER'],
+  [1003, 'ETOILE', 'NUIT', 'SCINTILLER', 'Effet lumineux des astres dans le ciel sombre', 2, 'verbe', 'BRILLER', 'MIROITER'],
+  [1004, 'CARBONE', 'PRESSION', 'DIAMANT', 'Transformation geologique extreme menant au joyau', 1, 'nom', 'CRISTAL', 'MINERAL'],
+  [2001, 'FLEUR', 'ABEILLE', 'BUTINER', 'Travailler activement le nectar des plantes', 3, 'verbe', 'VOLER', 'PIQUER'],
+  [2002, 'ROMAIN', 'GLADIATEUR', 'COMBATTRE', 'L action supreme dans l arene du Colisee', 4, 'verbe', 'TRIOMPHER', 'DIVERTIR'],
+  [3001, 'AIMANT', 'FER', 'ATTIRER', 'Force magnetique invisible a l oeuvre', 7, 'verbe', 'COLLER', 'CAPTURER'],
+  [4001, 'SECRET', 'CADENAS', 'INVIOLABLE', 'Que nulle force ne peut forcer ni alterer', 9, 'adjectif', 'HERMETIQUE', 'IMPENETRABLE']
 ];
 
 const shuffleArray = (arr) => {
@@ -78,7 +80,7 @@ const parseBuffer = (buf) => {
       const decompressed = zlib.gunzipSync(buf).toString('utf-8');
       return JSON.parse(decompressed);
     } catch {
-      // Ignorer
+      // Continuer
     }
   }
   try {
@@ -94,9 +96,25 @@ const parseBuffer = (buf) => {
 };
 
 const downloadAndCacheTier = async (tier) => {
-  if (inMemoryVault.has(tier.name) || isDownloading.get(tier.name)) return;
+  if (isDownloading.get(tier.name)) return;
   isDownloading.set(tier.name, true);
 
+  // 1. Chargement instantané depuis le disque local si présent
+  try {
+    const localPath = path.join(__dirname, '..', 'data', 'vault', `${tier.name}.json`);
+    if (fs.existsSync(localPath)) {
+      const raw = fs.readFileSync(localPath, 'utf-8');
+      const parsed = JSON.parse(raw);
+      if (Array.isArray(parsed) && parsed.length > 0) {
+        inMemoryVault.set(tier.name, parsed);
+        console.log(`[VAULT] Succès: Tier ${tier.name} chargé en mémoire locale (${parsed.length} énigmes réelles).`);
+      }
+    }
+  } catch (e) {
+    // Continuer sur GitHub
+  }
+
+  // 2. Synchronisation et enrichissement depuis GitHub
   const candidateUrls = [
     `${RELEASE_URL_BASE}/${tier.name}.json.gz`,
     `${RELEASE_URL_BASE}/${tier.name}.json`,
@@ -113,20 +131,20 @@ const downloadAndCacheTier = async (tier) => {
         const parsed = parseBuffer(buffer);
         if (Array.isArray(parsed) && parsed.length > 0) {
           inMemoryVault.set(tier.name, parsed);
-          console.log(`[VAULT] Succès: Tier ${tier.name} chargé (${parsed.length} énigmes réelles depuis ${url}).`);
+          console.log(`[VAULT] Succès: Tier ${tier.name} synchronisé depuis GitHub (${parsed.length} énigmes réelles).`);
           return;
         }
       } catch {
-        // Tentative sur l'URL suivante
+        // Tentative suivante
       }
     }
-    throw new Error('Aucune source distante disponible');
   } catch (err) {
-    console.warn(`[VAULT] Impossible de charger ${tier.name} (${err.message}). Utilisation fallback secours.`);
-    const fallback = FALLBACK_LOGICAL.filter(item => Math.floor(item[0] / 1000) === tier.id);
-    inMemoryVault.set(tier.name, fallback.length > 0 ? fallback : FALLBACK_LOGICAL);
+    console.warn(`[VAULT] Synchronisation GitHub indisponible pour ${tier.name}.`);
   } finally {
     isDownloading.set(tier.name, false);
+    if (!inMemoryVault.has(tier.name)) {
+      inMemoryVault.set(tier.name, FALLBACK_LOGICAL);
+    }
   }
 };
 
@@ -144,7 +162,7 @@ exports.getEnigmaBatch = async (userLevel = 1, playedIds30Days = [], batchSize =
   const excludedSet = new Set(playedIds30Days.map(String));
   let available = pool.filter(item => !excludedSet.has(String(item[0])) && !excludedSet.has(`vlt_${item[0]}`));
 
-  // Si le joueur a épuisé les dizaines de milliers d'énigmes de son palier, on repart sur le pool complet
+  // Si le joueur a terminé toutes les énigmes de son palier, on repart sur le pool complet
   if (available.length === 0) {
     available = pool;
   }
