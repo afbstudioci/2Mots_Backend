@@ -22,7 +22,7 @@ const getBatch = async (req, res, next) => {
         // 2. Verrouillage préventif atomique immédiat : Dès que les 30 énigmes sont distribuées au joueur,
         // elles sont gravées dans l'historique 30 jours sans aucun conflit de concurrence MongoDB !
         if (enrichedPairs && enrichedPairs.length > 0 && req.user?._id) {
-            gameService.recordPlayedWordsAtomic(req.user._id, enrichedPairs.map(p => p._id)).catch(err => {
+            gameService.recordPlayedWordsAtomic(req.user._id, enrichedPairs).catch(err => {
                 console.error('[LOCK] Erreur enregistrement atomique :', err.message);
             });
         }

@@ -185,40 +185,44 @@ const SEED_CORPUS = [
   { tier: 4, diff: 9, type: "nom", ans: "PANDORE", w1s: ["BOITE","JARRE","CURIOSITE"], w2s: ["MAUX","ESPERANCE","MYTHE"], clues: ["Première femme mortelle ouvrant la boîte fatale", "Porteuse des maux et de l'espérance"], dists: ["PSYCHE","HECATE","MEDEE","PROMETHEE"] }
 ];
 
-const TARGET_PER_TIER = 50000;
-
 fs.mkdirSync('vault_packs', { recursive: true });
 let globalId = 1;
 
 for (let tierId = 1; tierId <= 4; tierId++) {
   const tierName = tierId === 1 ? 'tier1_facile' : (tierId === 2 ? 'tier2_moyen' : (tierId === 3 ? 'tier3_difficile' : 'tier4_expert'));
-  console.log(`\n=== Synthese Haute Densite pour ${tierName} (Objectif: ${TARGET_PER_TIER} enigmes)... ===`);
-
   const seeds = SEED_CORPUS.filter(s => s.tier === tierId);
   const pool = [];
+  const seenKeys = new Set();
 
-  // Mélange parfait des graines pour que deux concepts identiques ne se suivent jamais
-  for (let i = 0; i < TARGET_PER_TIER; i++) {
-    const seed = seeds[i % seeds.length];
-    const w1 = seed.w1s[Math.floor(Math.random() * seed.w1s.length)];
-    const w2 = seed.w2s[Math.floor(Math.random() * seed.w2s.length)];
-    const clue = seed.clues[Math.floor(Math.random() * seed.clues.length)];
+  for (const seed of seeds) {
+    for (let i = 0; i < seed.w1s.length; i++) {
+      for (let j = 0; j < seed.w2s.length; j++) {
+        const w1 = seed.w1s[i];
+        const w2 = seed.w2s[j];
+        if (w1 === w2) continue;
+        const key = `${w1}|${w2}|${seed.ans}`;
+        const revKey = `${w2}|${w1}|${seed.ans}`;
+        if (seenKeys.has(key) || seenKeys.has(revKey)) continue;
+        seenKeys.add(key);
 
-    const dShuffled = [...seed.dists].sort(() => 0.5 - Math.random());
-    const d1 = dShuffled[0];
-    const d2 = dShuffled[1];
+        const clue = seed.clues[(i + j) % seed.clues.length];
+        const dShuffled = [...seed.dists].sort(() => 0.5 - Math.random());
+        const d1 = dShuffled[0];
+        const d2 = dShuffled[1] || dShuffled[0];
 
-    pool.push([
-      globalId++,
-      w1,
-      w2,
-      seed.ans,
-      clue,
-      seed.diff,
-      seed.type,
-      d1,
-      d2
-    ]);
+        pool.push([
+          globalId++,
+          w1,
+          w2,
+          seed.ans,
+          clue,
+          seed.diff,
+          seed.type,
+          d1,
+          d2
+        ]);
+      }
+    }
   }
 
   // Shuffle complet du pool pour une variété totale
@@ -229,11 +233,13 @@ for (let tierId = 1; tierId <= 4; tierId++) {
 
   const raw = JSON.stringify(pool);
   const gz = zlib.gzipSync(Buffer.from(raw), { level: 9 });
-  const destPath = path.join('vault_packs', `${tierName}.json.gz`);
-  fs.writeFileSync(destPath, gz);
+  const destGz = path.join('vault_packs', `${tierName}.json.gz`);
+  const destJson = path.join('vault_packs', `${tierName}.json`);
+  fs.writeFileSync(destGz, gz);
+  fs.writeFileSync(destJson, raw);
 
-  const sizeMb = (gz.length / (1024 * 1024)).toFixed(2);
-  console.log(`[Succes] ${tierName}.json.gz genere : ${pool.length} enigmes (${sizeMb} Mo, ${seeds.length} racines uniques).`);
+  const sizeKb = (gz.length / 1024).toFixed(1);
+  console.log(`[Succes] ${tierName}.json.gz genere : ${pool.length} enigmes 100% uniques (${sizeKb} Ko, ${seeds.length} racines).`);
 }
 
-console.log("\n=== BASE INFINIE 200 000+ ENIGMES GENEREE AVEC SUCCES ===");
+console.log("\n=== BASE DE DONNEES D'ENIGMES 100% UNIQUE ET CERTIFIEE GENEREE ===");

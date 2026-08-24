@@ -29,22 +29,36 @@ const detectGrammaticalType = (word, declaredType) => {
     return (clean.endsWith('er') || clean.endsWith('ir') || clean.endsWith('re') || clean.endsWith('oir')) ? 'verbe' : 'nom';
 };
 
-const recordPlayedWords = (user, ids) => {
+const recordPlayedWords = (user, items) => {
     if (!user.playedWords) user.playedWords = [];
     const cooldown = calculateCooldown();
     const now = new Date();
-    ids.filter(Boolean).forEach(id => user.playedWords.push({ word: String(id), cooldownUntil: cooldown }));
+    (items || []).filter(Boolean).forEach(item => {
+        if (typeof item === 'string') {
+            user.playedWords.push({ word: item, cooldownUntil: cooldown, playedAt: now });
+        } else if (typeof item === 'object') {
+            if (item._id) user.playedWords.push({ word: String(item._id), cooldownUntil: cooldown, playedAt: now });
+            if (item.semanticSignature) user.playedWords.push({ word: String(item.semanticSignature), cooldownUntil: cooldown, playedAt: now });
+        }
+    });
     user.playedWords = user.playedWords.filter(pw => pw.cooldownUntil && now < new Date(pw.cooldownUntil)).slice(-10000);
 };
 
-const recordPlayedWordsAtomic = async (userId, ids) => {
-    if (!userId || !ids || ids.length === 0) return;
+const recordPlayedWordsAtomic = async (userId, items) => {
+    if (!userId || !items || items.length === 0) return;
     const cooldown = calculateCooldown();
-    const newItems = ids.filter(Boolean).map(id => ({
-        word: String(id),
-        cooldownUntil: cooldown,
-        playedAt: new Date()
-    }));
+    const now = new Date();
+    const newItems = [];
+    for (const item of items) {
+        if (!item) continue;
+        if (typeof item === 'string') {
+            newItems.push({ word: item, cooldownUntil: cooldown, playedAt: now });
+        } else if (typeof item === 'object') {
+            if (item._id) newItems.push({ word: String(item._id), cooldownUntil: cooldown, playedAt: now });
+            if (item.semanticSignature) newItems.push({ word: String(item.semanticSignature), cooldownUntil: cooldown, playedAt: now });
+        }
+    }
+    if (newItems.length === 0) return;
     await User.updateOne(
         { _id: userId },
         {
