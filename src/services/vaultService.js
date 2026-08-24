@@ -1,15 +1,32 @@
 //src/services/vaultService.js
-const { FALLBACK_NOUNS, FALLBACK_VERBS, FALLBACK_ADJ } = require('../utils/gameFallbacks');
+const https = require('https');
+const http = require('http');
+const zlib = require('zlib');
+
+const RELEASE_URL_BASE = process.env.VAULT_RELEASE_URL || 'https://github.com/afbstudioci/2mots-vault/releases/latest/download';
+const RAW_URL_BASE = process.env.VAULT_RAW_URL || 'https://raw.githubusercontent.com/afbstudioci/2mots-vault/main/vault_packs';
 
 const TIER_MAPPING = [
-  { id: 1, name: 'tier1_facile', minLevel: 1, maxLevel: 10, diff: [1, 2, 3] },
-  { id: 2, name: 'tier2_moyen', minLevel: 11, maxLevel: 30, diff: [4, 5, 6] },
-  { id: 3, name: 'tier3_difficile', minLevel: 31, maxLevel: 60, diff: [7, 8] },
-  { id: 4, name: 'tier4_expert', minLevel: 61, maxLevel: 999, diff: [9, 10] }
+  { id: 1, name: 'tier1_facile', minLevel: 1, maxLevel: 10 },
+  { id: 2, name: 'tier2_moyen', minLevel: 11, maxLevel: 30 },
+  { id: 3, name: 'tier3_difficile', minLevel: 31, maxLevel: 60 },
+  { id: 4, name: 'tier4_expert', minLevel: 61, maxLevel: 999 }
 ];
 
 const inMemoryVault = new Map();
-const POOL_SIZE_PER_TIER = 3000; // Ultra-léger en RAM (seulement ~3 Mo au total sur Render)
+const isDownloading = new Map();
+
+// Secours logique immédiat
+const FALLBACK_LOGICAL = [
+  [1001, 'SOLEIL', 'PLUIE', 'ARC-EN-CIEL', 'Spectre colore qui apparait dans le ciel', 1, 'nom', 'ORAGE', 'NUAGE'],
+  [1002, 'VOLANT', 'PLUME', 'BADMINTON', 'Sport de raquette rapide et aerien', 2, 'nom', 'TENNIS', 'SQUASH'],
+  [1003, 'AIGUILLE', 'TISSU', 'COUDRE', 'Assembler des pieces d etoffe', 1, 'v', 'TISSER', 'BRODER'],
+  [2001, 'CHAMPAGNE', 'COUPE', 'PETILLER', 'Formation de fines bulles effervescentes', 4, 'v', 'MOUSSER', 'TRINQUER'],
+  [2002, 'BOUSSOLE', 'NORD', 'ORIENTER', 'Determiner la bonne trajectoire', 5, 'v', 'GUIDER', 'POINTER'],
+  [3001, 'SERPENT', 'EGYPTE', 'PHARAON', 'Souverain antique protege par l ureeus', 7, 'nom', 'PYRAMIDE', 'PAPYRUS'],
+  [3002, 'ECHO', 'SILENCE', 'ROMPRE', 'Mettre fin brusquement au calme ambiant', 7, 'v', 'TROUBLER', 'RESONNER'],
+  [4001, 'SECRET', 'CADENAS', 'INVIOLABLE', 'Que nulle force ne peut forcer ni alterer', 9, 'adj', 'HERMETIQUE', 'IMPENETRABLE']
+];
 
 const shuffleArray = (arr) => {
   const a = [...arr];
@@ -20,60 +37,86 @@ const shuffleArray = (arr) => {
   return a;
 };
 
-const autoGenerateTierInMemory = (tier) => {
-  const enigmas = [];
-  const categories = ['verbs', 'nouns', 'adjectives'];
-  let idCounter = tier.id * 1000000;
-
-  for (let i = 0; i < POOL_SIZE_PER_TIER; i++) {
-    const cat = categories[i % categories.length];
-    const pool = cat === 'verbs' ? FALLBACK_VERBS : (cat === 'adjectives' ? FALLBACK_ADJ : FALLBACK_NOUNS);
-    const type = cat === 'verbs' ? 'v' : (cat === 'adjectives' ? 'adj' : 'nom');
-    const shuffled = shuffleArray(pool);
-
-    const w1 = shuffled[0] || 'SOLEIL';
-    const w2 = shuffled[1] || 'LUMIERE';
-    const ans = shuffled[2] || 'RAYON';
-    const d1 = shuffled[3] || 'CHALEUR';
-    const d2 = shuffled[4] || 'FLAMME';
-
-    const clue = cat === 'verbs' ? "Action fondamentale" : (cat === 'adjectives' ? "Qualite commune" : "Concept commun");
-    const diff = tier.diff[i % tier.diff.length];
-
-    enigmas.push([idCounter++, w1, w2, ans, clue, diff, type, d1, d2]);
-  }
-
-  inMemoryVault.set(tier.name, enigmas);
-  console.log(`[VAULT] Reserve activee pour ${tier.name} (${enigmas.length} enigmes en RAM - conso < 1 Mo)`);
-};
-
 const getTierForLevel = (level = 1) => {
   const found = TIER_MAPPING.find(t => level >= t.minLevel && level <= t.maxLevel);
   return found || TIER_MAPPING[0];
 };
 
+const fetchUrlBuffer = (targetUrl, maxRedirects = 5) => {
+  return new Promise((resolve, reject) => {
+    if (maxRedirects <= 0) return reject(new Error('Trop de redirections'));
+    const client = targetUrl.startsWith('https') ? https : http;
+
+    client.get(targetUrl, { headers: { 'User-Agent': '2Mots-Server' } }, (res) => {
+      if (res.statusCode >= 300 && res.statusCode < 400 && res.headers.location) {
+        return resolve(fetchUrlBuffer(res.headers.location, maxRedirects - 1));
+      }
+      if (res.statusCode !== 200) {
+        return reject(new Error(`HTTP ${res.statusCode} sur ${targetUrl}`));
+      }
+      const chunks = [];
+      res.on('data', chunk => chunks.push(chunk));
+      res.on('end', () => resolve(Buffer.concat(chunks)));
+    }).on('error', reject);
+  });
+};
+
+const downloadAndCacheTier = async (tier) => {
+  if (inMemoryVault.has(tier.name) || isDownloading.get(tier.name)) return;
+  isDownloading.set(tier.name, true);
+
+  try {
+    let buffer = null;
+    try {
+      buffer = await fetchUrlBuffer(`${RELEASE_URL_BASE}/${tier.name}.json.gz`);
+    } catch {
+      buffer = await fetchUrlBuffer(`${RAW_URL_BASE}/${tier.name}.json.gz`);
+    }
+
+    if (buffer) {
+      const decompressed = zlib.gunzipSync(buffer).toString('utf-8');
+      const parsed = JSON.parse(decompressed);
+
+      if (Array.isArray(parsed) && parsed.length > 0) {
+        // Échantillon actif de 10 000 énigmes en RAM pour préserver la mémoire (< 4 Mo)
+        const sampled = shuffleArray(parsed).slice(0, 10000);
+        inMemoryVault.set(tier.name, sampled);
+        console.log(`[VAULT] Pack ${tier.name} charge (Total source: ${parsed.length} enigmes, Echantillon actif RAM: ${sampled.length}).`);
+        return;
+      }
+    }
+    throw new Error('Flux vide');
+  } catch (err) {
+    const fallback = FALLBACK_LOGICAL.filter(item => Math.floor(item[0] / 1000) === tier.id);
+    inMemoryVault.set(tier.name, fallback.length > 0 ? fallback : FALLBACK_LOGICAL);
+  } finally {
+    isDownloading.set(tier.name, false);
+  }
+};
+
 exports.getEnigmaBatch = async (userLevel = 1, playedIds30Days = [], batchSize = 30) => {
   const tier = getTierForLevel(userLevel);
   if (!inMemoryVault.has(tier.name)) {
-    autoGenerateTierInMemory(tier);
+    await downloadAndCacheTier(tier);
   }
 
-  const activePool = inMemoryVault.get(tier.name) || [];
+  let pool = inMemoryVault.get(tier.name);
+  if (!pool || pool.length === 0) {
+    pool = FALLBACK_LOGICAL;
+  }
+
   const excludedSet = new Set(playedIds30Days.map(String));
-  const availableIndices = [];
+  let available = pool.filter(item => !excludedSet.has(String(item[0])) && !excludedSet.has(`vlt_${item[0]}`));
 
-  for (let i = 0; i < activePool.length; i++) {
-    const enigmaId = String(activePool[i][0]);
-    if (!excludedSet.has(enigmaId)) {
-      availableIndices.push(i);
-    }
+  if (available.length < 5) {
+    available = pool;
   }
 
-  const sourceIndices = availableIndices.length >= batchSize ? availableIndices : Array.from({ length: activePool.length }, (_, k) => k);
-  const pickedIndices = shuffleArray(sourceIndices).slice(0, batchSize);
+  // Clé dorée : Rare (25% de chance par partie) et position aléatoire entre la 5e et la 25e énigme
+  const shouldSpawnKey = Math.random() < 0.25;
+  const keyPosition = shouldSpawnKey ? (Math.floor(Math.random() * (picked.length - 8)) + 4) : -1;
 
-  return pickedIndices.map((idx, pos) => {
-    const item = activePool[idx];
+  return picked.map((item, pos) => {
     const [id, word1, word2, answer, clue, difficulty, type, dist1, dist2] = item;
     return {
       _id: `vlt_${id}`,
@@ -81,17 +124,17 @@ exports.getEnigmaBatch = async (userLevel = 1, playedIds30Days = [], batchSize =
       word1,
       word2,
       clue: clue || "Quel point commun les relie ?",
-      expectedType: type || 'nom',
+      expectedType: type === 'v' ? 'verbe' : (type === 'adj' ? 'adjectif' : 'nom'),
       difficulty: difficulty || 2,
       exactMatch: [answer],
       options: shuffleArray([answer, dist1 || 'Choix A', dist2 || 'Choix B']),
-      hasKey: pos === 17
+      hasKey: pos === keyPosition
     };
   });
 };
 
 exports.preloadAllTiers = () => {
   for (const tier of TIER_MAPPING) {
-    autoGenerateTierInMemory(tier);
+    downloadAndCacheTier(tier);
   }
 };

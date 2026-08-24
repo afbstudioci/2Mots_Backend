@@ -1,7 +1,9 @@
-name: Generate 10M Infinite Vault
+name: Generate AI Semantic Vault with Gemini
 
 on:
-  workflow_dispatch: # Permet de lancer la génération en 1 clic sur le site GitHub
+  schedule:
+    - cron: '0 0 1 * *'
+  workflow_dispatch:
   push:
     branches:
       - main
@@ -10,11 +12,11 @@ permissions:
   contents: write
 
 jobs:
-  build-vault:
+  build-ai-vault:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout du dépôt
+      - name: Checkout du depot
         uses: actions/checkout@v4
 
       - name: Configuration de Node.js
@@ -22,76 +24,173 @@ jobs:
         with:
           node-version: 20
 
-      - name: Génération des 10 Millions d'Énigmes par Paliers
+      - name: Generation des Enigmes IA par Gemini
+        env:
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
         run: |
-          node -e '
-          const fs = require("fs");
-          const zlib = require("zlib");
-          const path = require("path");
+          cat << 'EOF' > generate_ai_vault.js
+          const fs = require('fs');
+          const https = require('https');
+          const zlib = require('zlib');
+          const path = require('path');
+
+          const API_KEY = process.env.GEMINI_API_KEY;
+          if (!API_KEY) {
+            console.error("ERREUR CRITIQUE : GEMINI_API_KEY est absente des Secrets GitHub !");
+            process.exit(1);
+          }
+
+          const BATCHES = 3; // 3 requetes de 25 = 75 enigmes pures par palier
 
           const TIERS = [
-            { id: 1, name: "tier1_facile", minDiff: 1, maxDiff: 3, count: 2000000 },
-            { id: 2, name: "tier2_moyen", minDiff: 4, maxDiff: 6, count: 3000000 },
-            { id: 3, name: "tier3_difficile", minDiff: 7, maxDiff: 8, count: 3000000 },
-            { id: 4, name: "tier4_expert", minDiff: 9, maxDiff: 10, count: 2000000 }
+            { id: 1, name: 'tier1_facile', diff: 'Niveau Debutant (Niv 1-10) : Objets simples du quotidien, nature evidente, actions familieres.' },
+            { id: 2, name: 'tier2_moyen', diff: 'Niveau Intermediaire (Niv 11-30) : Metiers, sciences, sports, geographie, cuisine, culture.' },
+            { id: 3, name: 'tier3_difficile', diff: 'Niveau Avance (Niv 31-60) : Concepts abstraits, physique, histoire, processus complexes.' },
+            { id: 4, name: 'tier4_expert', diff: 'Niveau Expert / Maitre (Niv 61-100+) : Litterature, mythologie, vocabulaire noble, alchimie.' }
           ];
 
-          const NOUNS = ["SOLEIL","LUNE","ETOILE","TERRE","OCEAN","FLEUVE","MONTAGNE","FORET","DESERT","VOLCAN","CIEL","NUAGE","PLUIE","NEIGE","ORAGE","ECLAIR","VENT","TEMPETE","FEU","FLAMME","BRAISE","CENDRE","FUMEE","LUMIERE","OMBRE","CHALEUR","EAU","GLACE","VAPEUR","SOURCE","CASCADE","LAC","RIVIERE","VAGUE","ARBRE","FLEUR","RACINE","BRANCHE","FEUILLE","GRAINE","LION","AIGLE","LOUP","SERPENT","TIGRE","FAUCON","REQUIN","DAUPHIN","BALEINE","LIVRE","PLUME","ENCRE","PAGE","HISTOIRE","POEME","CHATEAU","PALAIS","FORTERESSE","TOUR","PONT","ROUTE","TEMPLE","EPEE","BOUCLIER","FLECHE","ARC","ARMURE","CASQUE","COURONNE","COEUR","ESPRIT","PENSEE","MEMOIRE","REVE","ESPOIR","COURAGE","FORCE","SAGESSE","DESTIN","MUSIQUE","NOTE","MELODIE","RYTHME","CHANT","TEMPS","HEURE","MINUTE","SECONDE","SIECLE","OR","ARGENT","BRONZE","FER","ACIER","DIAMANT","RUBIS","VOYAGE","CHEMIN","BOUSSOLE","CARTE","NAVIRE","PORT","ILE"];
-          const VERBS = ["VOLER","COURIR","NAGER","MARCHER","GRIMPER","SAUTER","GLISSER","PLONGER","FLOTTER","BRILLER","ECLAIRER","RAYONNER","SCINTILLER","LUIRE","FLAMBOYER","ILLUMINER","BRULER","CONSUMER","ENFLAMMER","CHAUFFER","FONDRE","COULER","JAILLIR","ONDULER","RUISSELLER","INONDER","SUBMERGER","DEBORDER","ECRIRE","DESSINER","PEINDRE","SCULPTER","TRACER","GRAVER","COMPOSER","IMAGINER","CREER","FORGER","COMBATTRE","DEFENDRE","ATTAQUER","PROTEGER","VAINCRE","TRIOMPHER","CHANTER","JOUER","RESONNER","VIBRER","PENSER","MEDITER","REFLECHIR","CONTEMPLER","SONGER","REVER","GUIDER","DIRIGER","NAVIGUER","ORIENTER","PILOTER","MENER"];
-          const ADJS = ["RAPIDE","LENT","PUISSANT","AGILE","VIF","LEGER","LOURD","DUR","SOUPLE","BRILLANT","SOMBRE","LUMINEUX","OBSCUR","ECLATANT","RADIEUX","TERNE","CHAUD","FROID","BRULANT","GLACIAL","TIEDE","IMMENSE","MINUSCULE","GEANT","COLOSSAL","INFINI","VASTE","PROFOND","HAUT","ANCIEN","NOUVEAU","ANTIQUE","MODERNE","ETERNEL","EPHEMERE","PRECIEUX","RARE","DORE","ARGENTE","PUR","NOBLE","MYSTERIEUX","SECRET","CACHE","ENIGMATIQUE","SACRE","MAGIQUE","LEGENDAIRE","DIVIN"];
+          const THEMES = [
+            "Sciences & Espace", "Nature & Animaux", "Histoire & Civilisations",
+            "Cuisine & Terroir", "Arts & Musique", "Sports & Aventure",
+            "Objets & Outils", "Sensations & Emotions"
+          ];
 
-          const CLUES = {
-            nouns: ["Element fondamental qui les relie", "Concept commun a ces deux elements", "Ce qui unit ces deux symboles", "Leur essence commune"],
-            verbs: ["Action dynamique qui les associe", "Ce que l on fait avec ces deux elements", "Mouvement ou processus les unissant"],
-            adjectives: ["Qualite frappante qui les caracterise", "Attribut commun a ces deux notions", "Ce qui decrit leur etat"]
-          };
+          function callGemini(prompt) {
+            return new Promise((resolve, reject) => {
+              const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${API_KEY}`;
+              const payload = JSON.stringify({
+                contents: [{ parts: [{ text: prompt }] }]
+              });
 
-          fs.mkdirSync("vault_packs", { recursive: true });
+              const req = https.request(url, {
+                method: 'POST',
+                headers: {
+                  'Content-Type': 'application/json',
+                  'Content-Length': Buffer.byteLength(payload)
+                }
+              }, (res) => {
+                let data = '';
+                res.on('data', chunk => data += chunk);
+                res.on('end', () => {
+                  try {
+                    const parsed = JSON.parse(data);
+                    if (parsed.error) {
+                      return reject(new Error("API Gemini Error: " + JSON.stringify(parsed.error)));
+                    }
+                    let text = parsed.candidates[0].content.parts[0].text;
+                    text = text.replace(/```json/g, '').replace(/```/g, '').trim();
+                    resolve(JSON.parse(text));
+                  } catch (e) {
+                    reject(new Error("Reponse brute invalide : " + data.substring(0, 300)));
+                  }
+                });
+              });
 
-          let globalId = 1;
-          for (const tier of TIERS) {
-            console.log(`Generation de ${tier.name} (${tier.count} enigmes)...`);
-            const enigmas = [];
-            for (let i = 0; i < tier.count; i++) {
-              const cat = i % 3 === 0 ? "verbs" : (i % 3 === 1 ? "adjectives" : "nouns");
-              const pool = cat === "verbs" ? VERBS : (cat === "adjectives" ? ADJS : NOUNS);
-              const type = cat === "verbs" ? "v" : (cat === "adjectives" ? "adj" : "nom");
-
-              const r1 = Math.floor(Math.random() * pool.length);
-              let r2 = (r1 + 1 + Math.floor(Math.random() * (pool.length - 1))) % pool.length;
-              let rAns = (r2 + 1 + Math.floor(Math.random() * (pool.length - 2))) % pool.length;
-              let rD1 = (rAns + 1 + Math.floor(Math.random() * (pool.length - 3))) % pool.length;
-              let rD2 = (rD1 + 1 + Math.floor(Math.random() * (pool.length - 4))) % pool.length;
-
-              const clueArr = CLUES[cat];
-              const clue = clueArr[i % clueArr.length];
-              const diff = tier.minDiff + (i % (tier.maxDiff - tier.minDiff + 1));
-
-              enigmas.push([
-                globalId++,
-                pool[r1],
-                pool[r2],
-                pool[rAns],
-                clue,
-                diff,
-                type,
-                pool[rD1],
-                pool[rD2]
-              ]);
-            }
-
-            const rawJson = JSON.stringify(enigmas);
-            const gzipped = zlib.gzipSync(Buffer.from(rawJson));
-            fs.writeFileSync(path.join("vault_packs", `${tier.name}.json.gz`), gzipped);
-            console.log(`Termine : ${tier.name}.json.gz (${(gzipped.length / 1024 / 1024).toFixed(2)} Mo)`);
+              req.on('error', reject);
+              req.write(payload);
+              req.end();
+            });
           }
-          '
+
+          async function sleep(ms) {
+            return new Promise(r => setTimeout(r, ms));
+          }
+
+          async function run() {
+            fs.mkdirSync('vault_packs', { recursive: true });
+            let globalId = 1;
+
+            for (const tier of TIERS) {
+              console.log(`\n=== Generation IA pour ${tier.name} ===`);
+              const pool = [];
+              const seenCombos = new Set();
+
+              for (let b = 0; b < BATCHES; b++) {
+                const theme = THEMES[b % THEMES.length];
+                console.log(`[Palier ${tier.id}] Lot ${b + 1}/${BATCHES} (${theme})...`);
+
+                const prompt = `Tu es le concepteur du jeu "2Mots".
+Reponds UNIQUEMENT par un tableau JSON brut contenant 25 enigmes semantiques 100% FRANCAISES, HAUTEMENT LOGIQUES et INGENIEUSES.
+
+Difficulte : ${tier.diff}
+Theme : ${theme}
+
+REGLES :
+1. word1 + word2 doivent mener logiquement et avec evidence a "answer".
+2. answer, distractor1 et distractor2 DOIVENT avoir STRICTEMENT la meme nature grammaticale (3 verbes, 3 noms ou 3 adjectifs).
+3. L indice "clue" doit etre precis, contextuel et sans phrase generique.
+
+Format JSON attendu :
+[
+  {
+    "word1": "VOLANT",
+    "word2": "PLUME",
+    "answer": "BADMINTON",
+    "clue": "Sport de raquette rapide et aerien",
+    "difficulty": ${tier.id === 1 ? 1 : tier.id === 2 ? 4 : tier.id === 3 ? 7 : 9},
+    "type": "nom",
+    "distractor1": "TENNIS",
+    "distractor2": "SQUASH"
+  }
+]`;
+
+                try {
+                  const enigmas = await callGemini(prompt);
+                  if (Array.isArray(enigmas)) {
+                    for (const item of enigmas) {
+                      if (!item.word1 || !item.word2 || !item.answer) continue;
+                      const w1 = String(item.word1).toUpperCase().trim();
+                      const w2 = String(item.word2).toUpperCase().trim();
+                      const ans = String(item.answer).toUpperCase().trim();
+                      const key = `${w1}#${w2}#${ans}`;
+                      if (seenCombos.has(key)) continue;
+                      seenCombos.add(key);
+
+                      const d1 = String(item.distractor1 || 'CHOIX A').toUpperCase().trim();
+                      const d2 = String(item.distractor2 || 'CHOIX B').toUpperCase().trim();
+
+                      pool.push([
+                        globalId++,
+                        w1,
+                        w2,
+                        ans,
+                        item.clue || "Point commun semantique",
+                        item.difficulty || (tier.id * 2),
+                        item.type || "nom",
+                        d1,
+                        d2
+                      ]);
+                    }
+                    console.log(` -> Reussi (+${enigmas.length} enigmes)`);
+                  }
+                } catch (err) {
+                  console.warn(`Avertissement :`, err.message);
+                }
+
+                await sleep(2000);
+              }
+
+              const raw = JSON.stringify(pool);
+              const gz = zlib.gzipSync(Buffer.from(raw));
+              const destPath = path.join('vault_packs', `${tier.name}.json.gz`);
+              fs.writeFileSync(destPath, gz);
+              console.log(`[Succes] ${tier.name}.json.gz sauvegarde (${pool.length} enigmes).`);
+            }
+          }
+
+          run().catch((err) => {
+            console.error("Erreur critique :", err);
+            process.exit(1);
+          });
+          EOF
+
+          node generate_ai_vault.js
 
       - name: Publication automatique dans la Release GitHub
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: v1.0.0
-          name: Initial Vault Release
+          tag_name: latest
+          name: Latest AI Semantic Vault
           draft: false
           prerelease: false
           files: vault_packs/*.json.gz
