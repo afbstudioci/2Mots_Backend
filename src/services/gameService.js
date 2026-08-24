@@ -37,6 +37,27 @@ const recordPlayedWords = (user, ids) => {
     user.playedWords = user.playedWords.filter(pw => pw.cooldownUntil && now < new Date(pw.cooldownUntil)).slice(-10000);
 };
 
+const recordPlayedWordsAtomic = async (userId, ids) => {
+    if (!userId || !ids || ids.length === 0) return;
+    const cooldown = calculateCooldown();
+    const newItems = ids.filter(Boolean).map(id => ({
+        word: String(id),
+        cooldownUntil: cooldown,
+        playedAt: new Date()
+    }));
+    await User.updateOne(
+        { _id: userId },
+        {
+            $push: {
+                playedWords: {
+                    $each: newItems,
+                    $slice: -10000
+                }
+            }
+        }
+    );
+};
+
 const enrichPairsWithOptions = async (wordPairs) => {
     return wordPairs.map((rawPair, i) => {
         const correctAnswer = (rawPair.exactMatch && rawPair.exactMatch[0]) || rawPair.word1;
@@ -209,6 +230,7 @@ const syncUserKeys = async (userId, kevyKeys) => {
 
 module.exports = {
     recordPlayedWords,
+    recordPlayedWordsAtomic,
     enrichPairsWithOptions,
     checkAnswerRealtime,
     useHint,

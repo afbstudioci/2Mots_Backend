@@ -19,11 +19,12 @@ const getBatch = async (req, res, next) => {
         // 1. Tirage prioritaire ultra-rapide parmi la réserve authentique (par palier de niveau)
         let enrichedPairs = await vaultService.getEnigmaBatch(req.user?.level || 1, played30Days, 30);
 
-        // 2. Verrouillage préventif immédiat : Dès que les 30 énigmes sont distribuées au joueur,
-        // elles sont gravées dans l'historique 30 jours, même en cas de déconnexion ou crash !
-        if (enrichedPairs && enrichedPairs.length > 0 && req.user) {
-            gameService.recordPlayedWords(req.user, enrichedPairs.map(p => p._id));
-            await req.user.save();
+        // 2. Verrouillage préventif atomique immédiat : Dès que les 30 énigmes sont distribuées au joueur,
+        // elles sont gravées dans l'historique 30 jours sans aucun conflit de concurrence MongoDB !
+        if (enrichedPairs && enrichedPairs.length > 0 && req.user?._id) {
+            gameService.recordPlayedWordsAtomic(req.user._id, enrichedPairs.map(p => p._id)).catch(err => {
+                console.error('[LOCK] Erreur enregistrement atomique :', err.message);
+            });
         }
 
         const rivalData = await leaderboardService.fetchNearbyRivals(req.user?._id, req.user?.bestScore || 0);

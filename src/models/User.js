@@ -130,7 +130,7 @@ const userSchema = new mongoose.Schema({
         isMuted: { type: Boolean, default: false },
         theme: { type: String, default: 'default' }
     }]
-}, { timestamps: true });
+}, { timestamps: true, versionKey: false });
 
 userSchema.index({ 'playedWords.word': 1, 'playedWords.cooldownUntil': 1 });
 
