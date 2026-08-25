@@ -114,7 +114,8 @@ const checkAnswerRealtime = async (userId, wordPairId, userAnswer, timeSpent) =>
     if (isCorrect) {
         await missionService.updateMissionProgress(userId, 'words_solved');
         isFastCombo = timeSpent <= 3;
-        earnedKevs = isFastCombo ? 3 : 1;
+        const totalSolved = (user.playedWords ? user.playedWords.length : 0) + 1;
+        earnedKevs = isFastCombo ? 1 : (totalSolved % 2 === 0 ? 1 : 0);
         user.kevs = (user.kevs || 0) + earnedKevs;
         user.xp = (user.xp || 0) + (isFastCombo ? 2 : 1);
         currentXp = user.xp;
