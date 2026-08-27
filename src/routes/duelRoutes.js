@@ -10,6 +10,7 @@ router.get('/opponents', duelController.getEligibleOpponents);
 router.get('/invites', duelController.getPendingInvites);
 router.post('/invite', duelController.createInvite);
 router.post('/respond', duelController.respondInvite);
+router.post('/cancel', duelController.cancelInvite);
 router.get('/:id', duelController.getDuelDetails);
 
 module.exports = router;

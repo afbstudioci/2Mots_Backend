@@ -104,3 +104,20 @@ exports.getDuelDetails = async (req, res, next) => {
         next(error);
     }
 };
+
+exports.cancelInvite = async (req, res, next) => {
+    try {
+        const { duelId } = req.body;
+        if (!duelId) {
+            return res.status(400).json({ status: 'fail', message: 'Identifiant du duel requis.' });
+        }
+        const result = await duelService.cancelDuelInvite(req.user._id, duelId);
+        res.status(200).json({
+            status: 'success',
+            message: 'Invitation annulée avec succès.',
+            data: result
+        });
+    } catch (error) {
+        next(error);
+    }
+};

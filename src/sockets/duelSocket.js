@@ -36,6 +36,10 @@ module.exports = (io, socket) => {
         });
     });
 
+    socket.on('duel_cancel_invite', ({ opponentId, duelId }) => {
+        io.to(opponentId).emit('duel_invite_cancelled', { duelId });
+    });
+
     socket.on('duel_buzz', async ({ duelId, userId }) => {
         try {
             const duel = await duelService.handleBuzzer(duelId, userId);

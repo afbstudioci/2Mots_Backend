@@ -149,6 +149,10 @@ exports.respondToDuelInvite = async (opponentId, duelId, accept) => {
     duel.startedAt = new Date();
     await duel.save();
 
+    try {
+        await notificationService.onDuelAccepted(duel.challenger._id, duel.opponent.login, duel._id);
+    } catch {}
+
     return duel;
 };
 
@@ -278,4 +282,15 @@ exports.getUserInvites = async (userId) => {
             .lean()
     ]);
     return { received, sent };
+};
+
+exports.cancelDuelInvite = async (challengerId, duelId) => {
+    const duel = await DuelSession.findOne({ _id: duelId, challenger: challengerId, status: 'pending' });
+    if (!duel) {
+        throw new Error('Invitation introuvable ou déjà traitée.');
+    }
+    duel.status = 'cancelled';
+    duel.endedAt = new Date();
+    await duel.save();
+    return { status: 'cancelled', duelId: duel._id };
 };

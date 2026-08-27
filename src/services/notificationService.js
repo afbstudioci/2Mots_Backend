@@ -39,8 +39,11 @@ const send = async (recipientId, title, body, data = {}) => {
         await admin.messaging().send(payload);
         console.log(`[PUSH] Notification envoyée à ${user.login}: "${title}"`);
     } catch (error) {
-        // Ne pas crasher si Firebase n'est pas configuré
-        if (error.code === 'app/no-app') {
+        if (error.code === 'messaging/registration-token-not-registered' ||
+            error.code === 'messaging/invalid-registration-token') {
+            console.warn(`[PUSH] Token expiré pour ${recipientId}, purge en base.`);
+            await User.findByIdAndUpdate(recipientId, { $unset: { fcmToken: 1 } });
+        } else if (error.code === 'app/no-app') {
             console.warn('[PUSH] Firebase non initialisé, notification ignorée');
         } else {
             console.error('[PUSH] Erreur:', error.message);
@@ -102,6 +105,14 @@ exports.onDuelInvite = async (recipientId, challengerName, betAmount, duelId) =>
         type: 'duel_invite',
         challengerName,
         betAmount: String(betAmount),
+        duelId: String(duelId)
+    });
+};
+
+exports.onDuelAccepted = async (challengerId, opponentName, duelId) => {
+    await send(challengerId, 'Défi accepté !', `${opponentName} a accepté votre défi ! Le duel commence !`, {
+        type: 'duel_accepted',
+        opponentName,
         duelId: String(duelId)
     });
 };
