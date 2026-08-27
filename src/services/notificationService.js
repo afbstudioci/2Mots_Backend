@@ -32,7 +32,10 @@ const sendExpoPush = (pushToken, title, body, data) => {
         }, (res) => {
             let resData = '';
             res.on('data', (chunk) => { resData += chunk; });
-            res.on('end', () => resolve(true));
+            res.on('end', () => {
+                console.log('[PUSH_EXPO] Réponse:', resData);
+                resolve(true);
+            });
         });
 
         req.on('error', (err) => {
@@ -51,7 +54,10 @@ const sendExpoPush = (pushToken, title, body, data) => {
 const send = async (recipientId, title, body, rawData = {}) => {
     try {
         const user = await User.findById(recipientId).select('fcmToken login').lean();
-        if (!user || !user.fcmToken) return;
+        if (!user || !user.fcmToken) {
+            console.log(`[PUSH] Destinataire ${recipientId} sans fcmToken en base`);
+            return;
+        }
 
         const token = user.fcmToken.trim();
         const sanitizedData = {};
@@ -60,6 +66,7 @@ const send = async (recipientId, title, body, rawData = {}) => {
         }
 
         if (token.startsWith('ExponentPushToken') || token.startsWith('ExpoPushToken')) {
+            console.log(`[PUSH] Envoi Expo Push à ${user.login}`);
             await sendExpoPush(token, title, body, sanitizedData);
             return;
         }
@@ -69,10 +76,7 @@ const send = async (recipientId, title, body, rawData = {}) => {
                 title,
                 body,
             },
-            data: {
-                ...sanitizedData,
-                click_action: 'FLUTTER_NOTIFICATION_CLICK',
-            },
+            data: sanitizedData,
             android: {
                 priority: 'high',
                 notification: {
@@ -88,17 +92,19 @@ const send = async (recipientId, title, body, rawData = {}) => {
         };
 
         if (admin.apps && admin.apps.length > 0) {
-            await admin.messaging().send(payload);
+            console.log(`[PUSH] Envoi Firebase FCM à ${user.login}`);
+            const response = await admin.messaging().send(payload);
+            console.log(`[PUSH] Succès FCM ID: ${response}`);
+        } else {
+            console.warn('[PUSH] Admin SDK Firebase non initialisé');
         }
     } catch (error) {
         if (error.code === 'messaging/registration-token-not-registered' ||
             error.code === 'messaging/invalid-registration-token') {
-            console.warn(`[PUSH] Token expiré pour ${recipientId}, purge en base.`);
+            console.warn(`[PUSH] Token invalide pour ${recipientId}, purge en base.`);
             await User.findByIdAndUpdate(recipientId, { $unset: { fcmToken: 1 } });
-        } else if (error.code === 'app/no-app') {
-            console.warn('[PUSH] Firebase non initialisé, notification ignorée');
         } else {
-            console.warn('[PUSH] Notification non délivrée:', error.message);
+            console.warn('[PUSH] Erreur envoi:', error.message);
         }
     }
 };

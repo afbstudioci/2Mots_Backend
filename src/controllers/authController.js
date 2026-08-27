@@ -157,10 +157,12 @@ exports.updateFcmToken = async (req, res) => {
     try {
         const { fcmToken } = req.body;
         const User = require('../models/User');
-        if (fcmToken && req.user?.id) {
-            await User.findByIdAndUpdate(req.user.id, { fcmToken });
+        const userId = req.user?._id || req.user?.id;
+        if (fcmToken && userId) {
+            await User.findByIdAndUpdate(userId, { fcmToken: String(fcmToken).trim() });
+            console.log(`[AUTH] Token FCM mis à jour pour l'utilisateur ${userId}`);
         }
-        return res.status(200).json({ status: 'success', message: 'Token FCM synchronis.' });
+        return res.status(200).json({ status: 'success', message: 'Token FCM synchronisé.' });
     } catch (error) {
         return res.status(400).json({ status: 'fail', message: error.message });
     }
