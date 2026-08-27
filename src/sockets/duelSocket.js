@@ -79,6 +79,30 @@ module.exports = (io, socket) => {
         }
     });
 
+    socket.on('duel_skip_enigma', async ({ duelId }) => {
+        try {
+            const result = await duelService.skipEnigma(duelId);
+            if (result) {
+                io.to(`duel_${duelId}`).emit('duel_enigma_skipped', {
+                    scores: result.scores,
+                    currentEnigmaIndex: result.currentEnigmaIndex,
+                    nextEnigma: result.nextEnigma,
+                    isLastEnigma: result.isLastEnigma
+                });
+
+                if (result.isLastEnigma) {
+                    const finalSummary = await duelService.finishDuel(duelId);
+                    io.to(`duel_${duelId}`).emit('duel_game_over', {
+                        duel: finalSummary,
+                        reason: 'all_enigmas_completed'
+                    });
+                }
+            }
+        } catch (error) {
+            console.error('[SOCKET_DUEL] Erreur skip enigma:', error.message);
+        }
+    });
+
     socket.on('duel_finish', async ({ duelId }) => {
         try {
             const finalSummary = await duelService.finishDuel(duelId);

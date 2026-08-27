@@ -218,6 +218,24 @@ exports.submitAnswer = async (duelId, userId, answer) => {
     };
 };
 
+exports.skipEnigma = async (duelId) => {
+    const duel = await DuelSession.findOne({ _id: duelId, status: 'in_progress' });
+    if (!duel) return null;
+
+    duel.currentEnigmaIndex += 1;
+    duel.activeBuzzer = { userId: null, lockedAt: null, expiresAt: null };
+
+    const isLastEnigma = duel.currentEnigmaIndex >= duel.enigmas.length;
+    await duel.save();
+
+    return {
+        scores: duel.scores,
+        currentEnigmaIndex: duel.currentEnigmaIndex,
+        nextEnigma: isLastEnigma ? null : duel.enigmas[duel.currentEnigmaIndex],
+        isLastEnigma
+    };
+};
+
 exports.finishDuel = async (duelId) => {
     const duel = await DuelSession.findOne({ _id: duelId, status: { $in: ['in_progress', 'pending'] } });
     if (!duel) {
