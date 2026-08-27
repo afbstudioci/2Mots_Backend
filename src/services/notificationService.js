@@ -94,3 +94,21 @@ exports.onMissionComplete = async (userId, missionTitle) => {
         missionTitle
     });
 };
+
+// --- NOTIFICATIONS DE DUEL ---
+
+exports.onDuelInvite = async (recipientId, challengerName, betAmount, duelId) => {
+    await send(recipientId, 'Défi en Duel !', `${challengerName} vous défie en Duel 1v1 pour ${betAmount} Kevs !`, {
+        type: 'duel_invite',
+        challengerName,
+        betAmount: String(betAmount),
+        duelId: String(duelId)
+    });
+};
+
+exports.onDuelRejected = async (challengerId, opponentName) => {
+    await send(challengerId, 'Défi refusé', `${opponentName} a décliné votre invitation de duel.`, {
+        type: 'duel_rejected',
+        opponentName
+    });
+};

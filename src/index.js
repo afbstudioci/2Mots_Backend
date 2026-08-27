@@ -97,6 +97,10 @@ io.on('connection', (socket) => {
     socket.on('disconnect', () => {
         console.log(`[SOCKET] Utilisateur déconnecté: ${socket.id}`);
     });
+
+    // Gestion des événements de Duel 1v1
+    const registerDuelSocket = require('./sockets/duelSocket');
+    registerDuelSocket(io, socket);
 });
 
 const vaultService = require('./services/vaultService');
