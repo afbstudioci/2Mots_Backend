@@ -52,8 +52,8 @@ exports.createInvite = async (req, res, next) => {
 
         const io = req.app.get('io');
         if (io) {
-            io.to(opponentId.toString()).emit('duel_invite_received', {
-                duelId: duel._id,
+            io.to(String(opponentId)).emit('duel_invite_received', {
+                duelId: String(duel._id),
                 challengerName: req.user.login,
                 betAmount
             });
@@ -86,8 +86,8 @@ exports.respondInvite = async (req, res, next) => {
         if (io && result) {
             const challengerId = result.challenger?._id || result.challenger;
             if (challengerId) {
-                io.to(challengerId.toString()).emit('duel_invite_response', {
-                    duelId: result._id,
+                io.to(String(challengerId)).emit('duel_invite_response', {
+                    duelId: String(result.duelId || result._id || duelId),
                     opponentName: req.user.login,
                     accept
                 });
@@ -135,7 +135,10 @@ exports.cancelInvite = async (req, res, next) => {
         const result = await duelService.cancelDuelInvite(req.user._id, duelId);
         const io = req.app.get('io');
         if (io && result?.opponent) {
-            io.to(result.opponent.toString()).emit('duel_invite_cancelled', { duelId });
+            io.to(String(result.opponent)).emit('duel_invite_cancelled', {
+                duelId: String(duelId),
+                opponentName: req.user.login
+            });
         }
 
         res.status(200).json({

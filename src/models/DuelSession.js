@@ -22,7 +22,7 @@ const duelSessionSchema = new mongoose.Schema({
     },
     status: {
         type: String,
-        enum: ['pending', 'accepted', 'rejected', 'in_progress', 'completed', 'cancelled'],
+        enum: ['pending', 'accepted', 'rejected', 'ready', 'waiting_players', 'in_progress', 'completed', 'cancelled'],
         default: 'pending',
         index: true
     },
