@@ -50,6 +50,15 @@ exports.createInvite = async (req, res, next) => {
         const { opponentId, betAmount } = parsed.data;
         const duel = await duelService.createDuelInvite(req.user._id, opponentId, betAmount);
 
+        const io = req.app.get('io');
+        if (io) {
+            io.to(opponentId.toString()).emit('duel_invite_received', {
+                duelId: duel._id,
+                challengerName: req.user.login,
+                betAmount
+            });
+        }
+
         res.status(201).json({
             status: 'success',
             message: 'Invitation de duel envoyée avec succès.',
@@ -72,6 +81,18 @@ exports.respondInvite = async (req, res, next) => {
 
         const { duelId, accept } = parsed.data;
         const result = await duelService.respondToDuelInvite(req.user._id, duelId, accept);
+
+        const io = req.app.get('io');
+        if (io && result) {
+            const challengerId = result.challenger?._id || result.challenger;
+            if (challengerId) {
+                io.to(challengerId.toString()).emit('duel_invite_response', {
+                    duelId: result._id,
+                    opponentName: req.user.login,
+                    accept
+                });
+            }
+        }
 
         res.status(200).json({
             status: 'success',
@@ -112,6 +133,11 @@ exports.cancelInvite = async (req, res, next) => {
             return res.status(400).json({ status: 'fail', message: 'Identifiant du duel requis.' });
         }
         const result = await duelService.cancelDuelInvite(req.user._id, duelId);
+        const io = req.app.get('io');
+        if (io && result?.opponent) {
+            io.to(result.opponent.toString()).emit('duel_invite_cancelled', { duelId });
+        }
+
         res.status(200).json({
             status: 'success',
             message: 'Invitation annulée avec succès.',

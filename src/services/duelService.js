@@ -131,14 +131,22 @@ exports.respondToDuelInvite = async (opponentId, duelId, accept) => {
 
     const rawBatch = await vaultService.getEnigmaBatch(5, [], 20);
     const enigmas = (rawBatch || []).map((item, index) => {
-        const propositions = shuffleArray([item.answer, item.distractors?.[0] || 'MOT1', item.distractors?.[1] || 'MOT2']);
+        const answer = String(item.exactMatch?.[0] || item.answer || 'REPONSE').toUpperCase();
+        const propositions = Array.isArray(item.options) && item.options.length >= 3
+            ? item.options.map(p => String(p).toUpperCase())
+            : shuffleArray([
+                answer,
+                String(item.distractors?.[0] || 'CHOIX1').toUpperCase(),
+                String(item.distractors?.[1] || 'CHOIX2').toUpperCase()
+            ]);
+
         return {
-            enigmaId: item._id || `enigma_${index}`,
-            word1: item.word1,
-            word2: item.word2,
-            answer: item.answer,
+            enigmaId: String(item._id || `enigma_${index}`),
+            word1: String(item.word1 || 'MOT1').toUpperCase(),
+            word2: String(item.word2 || 'MOT2').toUpperCase(),
+            answer,
             propositions,
-            clue: item.clue || ''
+            clue: String(item.clue || '')
         };
     });
 

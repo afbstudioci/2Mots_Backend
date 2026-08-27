@@ -15,6 +15,8 @@ const io = new Server(server, {
     }
 });
 
+app.set('io', io);
+
 io.on('connection', (socket) => {
     console.log(`[SOCKET] Nouvel utilisateur connecté: ${socket.id}`);
 
