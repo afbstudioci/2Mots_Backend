@@ -1,14 +1,17 @@
-//src/services/notificationService.js
+// src/services/notificationService.js
+// MOTEUR DE NOTIFICATIONS HYBRIDE (DB + FCM PUSH V1 + SOCKET.IO)
+// STANDARD: Industriel / Bank Grade (Strict <= 325 lignes)
+
 const https = require('https');
 const User = require('../models/User');
 const Notification = require('../models/Notification');
 const admin = require('../config/firebase');
 
-const PUSH_CHANNEL_ID = 'default';
+const PUSH_CHANNEL_ID = 'twomots_alerts_v3';
 let ioInstance = null;
 
 /**
- * Injection de l'instance Socket.io pour diffusion temps réel
+ * Injection de l'instance Socket.io pour diffusion temps reel
  */
 exports.setIo = (io) => {
     ioInstance = io;
@@ -45,13 +48,13 @@ const sendExpoPush = (pushToken, title, body, data) => {
             let resData = '';
             res.on('data', (chunk) => { resData += chunk; });
             res.on('end', () => {
-                console.log('[PUSH_EXPO] Réponse:', resData);
+                console.log('[PUSH_EXPO] Reponse:', resData);
                 resolve(true);
             });
         });
 
         req.on('error', (err) => {
-            console.warn('[PUSH_EXPO] Erreur réseau:', err.message);
+            console.warn('[PUSH_EXPO] Erreur reseau:', err.message);
             resolve(false);
         });
 
@@ -61,15 +64,15 @@ const sendExpoPush = (pushToken, title, body, data) => {
 };
 
 /**
- * Moteur Hybride Bank-Grade (Standard Yély) :
+ * Moteur Hybride Bank-Grade (Standard Yely) :
  * 1. Persistance DB (Notification.create avec TTL 30j)
- * 2. Push Système FCM v1 / Expo
- * 3. Diffusion Temps Réel In-App (Socket.io)
+ * 2. Push Systeme FCM v1 / Expo
+ * 3. Diffusion Temps Reel In-App (Socket.io)
  */
 exports.sendNotification = async (recipientId, title, body, type = 'general', rawData = {}, senderId = null) => {
     let savedNotification = null;
 
-    // ÉTAPE 1 : Persistance DB
+    // ETAPE 1 : Persistance DB
     try {
         savedNotification = await Notification.create({
             recipient: recipientId,
@@ -83,7 +86,7 @@ exports.sendNotification = async (recipientId, title, body, type = 'general', ra
         console.warn('[NOTIF_DB] Erreur persistance notification:', dbErr.message);
     }
 
-    // ÉTAPE 2 : Diffusion Temps Réel Socket.io
+    // ETAPE 2 : Diffusion Temps Reel Socket.io
     try {
         if (ioInstance) {
             ioInstance.to(String(recipientId)).emit('notification_received', savedNotification || {
@@ -96,10 +99,10 @@ exports.sendNotification = async (recipientId, title, body, type = 'general', ra
             });
         }
     } catch (sockErr) {
-        console.warn('[NOTIF_SOCKET] Erreur émission temps réel:', sockErr.message);
+        console.warn('[NOTIF_SOCKET] Erreur emission temps reel:', sockErr.message);
     }
 
-    // ÉTAPE 3 : Push Notification Mobile (FCM v1 / Expo)
+    // ETAPE 3 : Push Notification Mobile (FCM v1 / Expo)
     try {
         const user = await User.findById(recipientId).select('+fcmToken login').lean();
         if (!user || !user.fcmToken) {
@@ -116,15 +119,15 @@ exports.sendNotification = async (recipientId, title, body, type = 'general', ra
         }
 
         if (token.startsWith('ExponentPushToken') || token.startsWith('ExpoPushToken')) {
-            console.log(`[PUSH] Envoi Expo Push à ${user.login}`);
+            console.log(`[PUSH] Envoi Expo Push a ${user.login}`);
             await sendExpoPush(token, title, body, sanitizedData);
             return savedNotification;
         }
 
         const message = {
             notification: {
-                title,
-                body
+                title: String(title),
+                body: String(body)
             },
             data: {
                 title: String(title),
@@ -154,17 +157,17 @@ exports.sendNotification = async (recipientId, title, body, type = 'general', ra
         };
 
         if (admin.apps && admin.apps.length > 0) {
-            console.log(`[PUSH] Envoi FCM v1 à ${user.login} (${recipientId})`);
+            console.log(`[PUSH] Envoi FCM v1 a ${user.login} (${recipientId}) via canal ${PUSH_CHANNEL_ID}`);
             const response = await admin.messaging().send(message);
-            console.log(`[PUSH] Succès FCM ID: ${response}`);
+            console.log(`[PUSH] Succes FCM ID: ${response}`);
         } else {
-            console.warn('[PUSH] Firebase Admin non initialisé, tentative Expo fallback');
+            console.warn('[PUSH] Firebase Admin non initialise, tentative Expo fallback');
             await sendExpoPush(token, title, body, sanitizedData);
         }
     } catch (error) {
         console.warn(`[PUSH] Erreur envoi push pour ${recipientId}: [${error.code || 'UNKNOWN'}] ${error.message}`);
         if (error.code === 'messaging/registration-token-not-registered') {
-            console.warn(`[PUSH] Token désenregistré pour ${recipientId}, nettoyage en base.`);
+            console.warn(`[PUSH] Token desenregistre pour ${recipientId}, nettoyage en base.`);
             await User.findByIdAndUpdate(recipientId, { $unset: { fcmToken: 1 } });
         }
     }
@@ -172,10 +175,10 @@ exports.sendNotification = async (recipientId, title, body, type = 'general', ra
     return savedNotification;
 };
 
-// --- Notifications Événements Duel ---
+// --- Notifications Evenements Duel ---
 
 exports.onDuelInvite = async (recipientId, challengerName, betAmount, duelId, challengerId = null) => {
-    await exports.sendNotification(recipientId, 'Défi en Duel !', `${challengerName} vous défie en Duel pour ${betAmount} Kevs !`, 'duel_invite', {
+    await exports.sendNotification(recipientId, 'Defi en Duel !', `${challengerName} vous defie en Duel pour ${betAmount} Kevs !`, 'duel_invite', {
         challengerName,
         betAmount: String(betAmount),
         duelId: String(duelId)
@@ -183,14 +186,14 @@ exports.onDuelInvite = async (recipientId, challengerName, betAmount, duelId, ch
 };
 
 exports.onDuelAccepted = async (challengerId, opponentName, duelId, opponentId = null) => {
-    await exports.sendNotification(challengerId, 'Défi accepté !', `${opponentName} a accepté votre défi ! Rejoignez l'arène !`, 'duel_accepted', {
+    await exports.sendNotification(challengerId, 'Defi accepte !', `${opponentName} a accepte votre defi ! Rejoignez l'arene !`, 'duel_accepted', {
         opponentName,
         duelId: String(duelId)
     }, opponentId);
 };
 
 exports.onDuelRejected = async (challengerId, opponentName, opponentId = null) => {
-    await exports.sendNotification(challengerId, 'Défi décliné', `${opponentName} a refusé votre invitation.`, 'duel_rejected', {
+    await exports.sendNotification(challengerId, 'Defi decline', `${opponentName} a refuse votre invitation.`, 'duel_rejected', {
         opponentName
     }, opponentId);
 };
@@ -200,9 +203,9 @@ exports.onDuelRejected = async (challengerId, opponentName, opponentId = null) =
 exports.onNewMessage = async (recipientId, senderName, messageText, type, senderId = null) => {
     const bodyMap = {
         text: messageText,
-        image: 'a envoyé une photo',
-        video: 'a envoyé une vidéo',
-        audio: 'a envoyé un message vocal'
+        image: 'a envoye une photo',
+        video: 'a envoye une video',
+        audio: 'a envoye un message vocal'
     };
     await exports.sendNotification(recipientId, senderName, bodyMap[type] || messageText, 'chat_message', {
         senderName
@@ -216,19 +219,19 @@ exports.onFriendRequestSent = async (recipientId, senderName, senderId = null) =
 };
 
 exports.onFriendRequestAccepted = async (requesterId, accepterName, accepterId = null) => {
-    await exports.sendNotification(requesterId, 'Demande acceptée !', `${accepterName} et vous êtes maintenant amis !`, 'friend_accepted', {
+    await exports.sendNotification(requesterId, 'Demande acceptee !', `${accepterName} et vous etes maintenant amis !`, 'friend_accepted', {
         accepterName
     }, accepterId);
 };
 
 exports.onLevelUp = async (userId, newLevel) => {
-    await exports.sendNotification(userId, 'Niveau supérieur !', `Félicitations ! Vous avez atteint le niveau ${newLevel} !`, 'level_up', {
+    await exports.sendNotification(userId, 'Niveau superieur !', `Felicitations ! Vous avez atteint le niveau ${newLevel} !`, 'level_up', {
         level: String(newLevel)
     });
 };
 
 exports.onMissionComplete = async (userId, missionTitle) => {
-    await exports.sendNotification(userId, 'Mission terminée !', `"${missionTitle}" est prête à être réclamée !`, 'mission_complete', {
+    await exports.sendNotification(userId, 'Mission terminee !', `"${missionTitle}" est prete a etre reclamee !`, 'mission_complete', {
         missionTitle
     });
 };
