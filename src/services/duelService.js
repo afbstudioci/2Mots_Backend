@@ -173,7 +173,24 @@ exports.getActiveDuel = async (userId) => {
         .sort({ updatedAt: -1 })
         .lean();
 
-    return activeDuel || null;
+    if (!activeDuel) return null;
+
+    const now = Date.now();
+    if (activeDuel.status === 'in_progress' && activeDuel.startedAt) {
+        const elapsed = (now - new Date(activeDuel.startedAt).getTime()) / 1000;
+        if (elapsed > ((activeDuel.duration || 60) + 20)) {
+            await duelEngine.finishDuel(activeDuel._id);
+            return null;
+        }
+    } else if (activeDuel.status === 'ready') {
+        const waitElapsed = (now - new Date(activeDuel.updatedAt || activeDuel.createdAt).getTime()) / 1000;
+        if (waitElapsed > 180) {
+            await exports.cancelInactiveDuel(userId, activeDuel._id);
+            return null;
+        }
+    }
+
+    return activeDuel;
 };
 
 exports.getUserInvites = async (userId) => {
@@ -213,7 +230,6 @@ exports.cancelInactiveDuel = async (userId, duelId) => {
     }
 
     if (duel.status === 'ready') {
-        // Rembourser les deux joueurs
         await Promise.all([
             User.updateOne({ _id: duel.challenger }, { $inc: { kevs: duel.betAmount } }),
             User.updateOne({ _id: duel.opponent }, { $inc: { kevs: duel.betAmount } })
