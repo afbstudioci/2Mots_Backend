@@ -3,8 +3,10 @@ const https = require('https');
 const User = require('../models/User');
 const admin = require('../config/firebase');
 
+const PUSH_CHANNEL_ID = 'twomots_alerts_v2';
+
 /**
- * Envoi sécurisé de push notification via Expo Push API
+ * Envoi de secours via Expo Push API
  */
 const sendExpoPush = (pushToken, title, body, data) => {
     return new Promise((resolve) => {
@@ -15,7 +17,8 @@ const sendExpoPush = (pushToken, title, body, data) => {
             body,
             data,
             priority: 'high',
-            channelId: 'default'
+            channelId: PUSH_CHANNEL_ID,
+            _displayInForeground: true
         });
 
         const req = https.request({
@@ -49,17 +52,17 @@ const sendExpoPush = (pushToken, title, body, data) => {
 };
 
 /**
- * Service centralisé pour l'envoi de notifications push
+ * Service centralisé d'envoi de notifications push résilient
  */
 const send = async (recipientId, title, body, rawData = {}) => {
     try {
         const user = await User.findById(recipientId).select('fcmToken login').lean();
         if (!user || !user.fcmToken) {
-            console.log(`[PUSH] Destinataire ${recipientId} sans fcmToken en base`);
+            console.log(`[PUSH] Destinataire ${recipientId} sans fcmToken.`);
             return;
         }
 
-        const token = user.fcmToken.trim();
+        const token = String(user.fcmToken).trim();
         const sanitizedData = {};
         for (const [key, value] of Object.entries(rawData)) {
             sanitizedData[key] = value !== undefined && value !== null ? String(value) : '';
@@ -71,47 +74,61 @@ const send = async (recipientId, title, body, rawData = {}) => {
             return;
         }
 
-        const payload = {
+        const message = {
             notification: {
                 title,
-                body,
+                body
             },
             data: sanitizedData,
             android: {
                 priority: 'high',
                 notification: {
-                    sound: 'default',
-                    channelId: 'default',
+                    title,
+                    body,
+                    channelId: PUSH_CHANNEL_ID,
                     priority: 'max',
-                    defaultVibrateTimings: true,
                     defaultSound: true,
+                    defaultVibrateTimings: true,
                     visibility: 'public',
+                    color: '#FF7F50'
+                }
+            },
+            apns: {
+                payload: {
+                    aps: {
+                        sound: 'default',
+                        badge: 1
+                    }
                 }
             },
             token
         };
 
         if (admin.apps && admin.apps.length > 0) {
-            console.log(`[PUSH] Envoi Firebase FCM à ${user.login}`);
-            const response = await admin.messaging().send(payload);
+            console.log(`[PUSH] Envoi FCM v1 à ${user.login}`);
+            const response = await admin.messaging().send(message);
             console.log(`[PUSH] Succès FCM ID: ${response}`);
         } else {
-            console.warn('[PUSH] Admin SDK Firebase non initialisé');
+            console.warn('[PUSH] Firebase Admin non initialisé, tentative Expo fallback');
+            await sendExpoPush(token, title, body, sanitizedData);
         }
     } catch (error) {
-        if (error.code === 'messaging/registration-token-not-registered' ||
-            error.code === 'messaging/invalid-registration-token') {
-            console.warn(`[PUSH] Token invalide pour ${recipientId}, purge en base.`);
+        if (
+            error.code === 'messaging/registration-token-not-registered' ||
+            error.code === 'messaging/invalid-registration-token'
+        ) {
+            console.warn(`[PUSH] Token expiré ou invalide pour ${recipientId}, purge en base.`);
             await User.findByIdAndUpdate(recipientId, { $unset: { fcmToken: 1 } });
         } else {
-            console.warn('[PUSH] Erreur envoi:', error.message);
+            console.warn('[PUSH] Erreur envoi push:', error.message);
         }
     }
 };
 
-// Notifications de Duel
+// --- Notifications Événements Duel ---
+
 exports.onDuelInvite = async (recipientId, challengerName, betAmount, duelId) => {
-    await send(recipientId, 'Défi en Duel !', `${challengerName} vous défie en Duel 1v1 pour ${betAmount} Kevs !`, {
+    await send(recipientId, 'Défi en Duel !', `${challengerName} vous défie en Duel pour ${betAmount} Kevs !`, {
         type: 'duel_invite',
         challengerName,
         betAmount: String(betAmount),
@@ -120,7 +137,7 @@ exports.onDuelInvite = async (recipientId, challengerName, betAmount, duelId) =>
 };
 
 exports.onDuelAccepted = async (challengerId, opponentName, duelId) => {
-    await send(challengerId, 'Défi accepté !', `${opponentName} a accepté votre défi ! Le duel commence !`, {
+    await send(challengerId, 'Défi accepté !', `${opponentName} a accepté votre défi ! Rejoignez l'arène de jeu !`, {
         type: 'duel_accepted',
         opponentName,
         duelId: String(duelId)
@@ -128,13 +145,14 @@ exports.onDuelAccepted = async (challengerId, opponentName, duelId) => {
 };
 
 exports.onDuelRejected = async (challengerId, opponentName) => {
-    await send(challengerId, 'Défi refusé', `${opponentName} a décliné votre invitation de duel.`, {
+    await send(challengerId, 'Défi décliné', `${opponentName} a refusé votre invitation.`, {
         type: 'duel_rejected',
         opponentName
     });
 };
 
-// Notifications de Chat
+// --- Notifications Sociales et Messages ---
+
 exports.onNewMessage = async (recipientId, senderName, messageText, type) => {
     const bodyMap = {
         text: messageText,
@@ -148,7 +166,6 @@ exports.onNewMessage = async (recipientId, senderName, messageText, type) => {
     });
 };
 
-// Notifications Sociales
 exports.onFriendRequestSent = async (recipientId, senderName) => {
     await send(recipientId, 'Nouvelle demande d\'ami', `${senderName} souhaite devenir votre ami !`, {
         type: 'friend_request',
@@ -163,7 +180,6 @@ exports.onFriendRequestAccepted = async (requesterId, accepterName) => {
     });
 };
 
-// Notifications de Progression
 exports.onLevelUp = async (userId, newLevel) => {
     await send(userId, 'Niveau supérieur !', `Félicitations ! Vous avez atteint le niveau ${newLevel} !`, {
         type: 'level_up',

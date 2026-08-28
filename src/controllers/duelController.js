@@ -4,12 +4,12 @@ const duelService = require('../services/duelService');
 const DuelSession = require('../models/DuelSession');
 
 const inviteSchema = z.object({
-    opponentId: z.string().min(1, 'L\'identifiant de l\'adversaire est obligatoire.'),
+    opponentId: z.string().min(1, "L'identifiant de l'adversaire est obligatoire."),
     betAmount: z.number().int().min(10, 'La mise minimale est de 10 Kevs.').max(1000, 'La mise maximale est de 1000 Kevs.')
 });
 
 const respondSchema = z.object({
-    duelId: z.string().min(1, 'L\'identifiant du duel est obligatoire.'),
+    duelId: z.string().min(1, "L'identifiant du duel est obligatoire."),
     accept: z.boolean()
 });
 
@@ -37,13 +37,25 @@ exports.getPendingInvites = async (req, res, next) => {
     }
 };
 
+exports.getActiveDuel = async (req, res, next) => {
+    try {
+        const activeDuel = await duelService.getActiveDuel(req.user._id);
+        res.status(200).json({
+            status: 'success',
+            data: activeDuel
+        });
+    } catch (error) {
+        next(error);
+    }
+};
+
 exports.createInvite = async (req, res, next) => {
     try {
         const parsed = inviteSchema.safeParse(req.body);
         if (!parsed.success) {
             return res.status(400).json({
                 status: 'fail',
-                message: parsed.error.issues[0]?.message || 'Données d\'invitation invalides.'
+                message: parsed.error.issues[0]?.message || "Données d'invitation invalides."
             });
         }
 
@@ -144,6 +156,31 @@ exports.cancelInvite = async (req, res, next) => {
         res.status(200).json({
             status: 'success',
             message: 'Invitation annulée avec succès.',
+            data: result
+        });
+    } catch (error) {
+        next(error);
+    }
+};
+
+exports.cancelInactiveDuel = async (req, res, next) => {
+    try {
+        const { duelId } = req.body;
+        if (!duelId) {
+            return res.status(400).json({ status: 'fail', message: 'Identifiant du duel requis.' });
+        }
+        const result = await duelService.cancelInactiveDuel(req.user._id, duelId);
+        const io = req.app.get('io');
+        if (io) {
+            io.to(`duel_${duelId}`).emit('duel_cancelled', {
+                duelId: String(duelId),
+                message: "Le duel a été annulé en raison de l'inactivité de l'adversaire. Vos mises ont été remboursées."
+            });
+        }
+
+        res.status(200).json({
+            status: 'success',
+            message: 'Duel annulé et mises remboursées.',
             data: result
         });
     } catch (error) {
