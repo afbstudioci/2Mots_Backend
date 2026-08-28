@@ -1,36 +1,49 @@
-//src/config/firebase.js
+// src/config/firebase.js
+// INITIALISATION FIREBASE ADMIN - Moteur Push
+// STANDARD: Industriel / Bank Grade (Inspiré de Yély)
+
 const admin = require('firebase-admin');
 
 try {
   if (!admin.apps.length) {
-    let privateKey = process.env.FIREBASE_PRIVATE_KEY;
-    const projectId = process.env.FIREBASE_PROJECT_ID;
-    const clientEmail = process.env.FIREBASE_CLIENT_EMAIL;
+    let initialized = false;
 
-    // Option 1 : JSON complet si renseigné
-    if (process.env.FIREBASE_SERVICE_ACCOUNT) {
+    // MÉTHODE 1 : Via JSON Complet (si FIREBASE_SERVICE_ACCOUNT est défini dans Render)
+    const serviceAccountRaw = process.env.FIREBASE_SERVICE_ACCOUNT;
+    if (serviceAccountRaw) {
       try {
-        const raw = process.env.FIREBASE_SERVICE_ACCOUNT.trim();
-        const serviceAccount = raw.startsWith('{') ? JSON.parse(raw) : JSON.parse(Buffer.from(raw, 'base64').toString('utf8'));
+        const raw = serviceAccountRaw.trim();
+        const serviceAccount = raw.startsWith('{')
+          ? JSON.parse(raw)
+          : JSON.parse(Buffer.from(raw, 'base64').toString('utf8'));
+
         admin.initializeApp({
           credential: admin.credential.cert(serviceAccount),
         });
-        console.log('[FIREBASE] Admin SDK initialisé avec succès via service account JSON');
-        return;
+
+        initialized = true;
+        console.log('[FIREBASE] Moteur Push initialisé avec succès (via Service Account JSON)');
       } catch (err) {
-        console.warn('[FIREBASE] Fallback vers variables individuelles...');
+        console.warn('[FIREBASE] Avertissement parsing Service Account JSON, tentative avec variables individuelles...');
       }
     }
 
-    // Option 2 : Variables d'environnement standard
-    if (!privateKey || !projectId || !clientEmail) {
-      console.warn("[FIREBASE] Variables d'environnement Firebase manquantes.");
-    } else {
-      // 1. On retire les guillemets éventuels
-      // 2. On retire les retours chariot Windows \r
-      // 3. On transforme TOUTES les occurrences de '\n' en véritables retours chariot
-      const cleanPrivateKey = privateKey
-        .replace(/^["']|["']$/g, '')
+    // MÉTHODE 2 : Via Variables d'environnement individuelles (Standard Yély)
+    if (!initialized) {
+      const rawKey = process.env.FIREBASE_PRIVATE_KEY;
+      const projectId = process.env.FIREBASE_PROJECT_ID;
+      const clientEmail = process.env.FIREBASE_CLIENT_EMAIL;
+
+      if (!rawKey || !projectId || !clientEmail) {
+        throw new Error("Variables d'environnement Firebase manquantes (FIREBASE_PROJECT_ID, FIREBASE_CLIENT_EMAIL ou FIREBASE_PRIVATE_KEY).");
+      }
+
+      // NETTOYAGE ABSOLU (Anti-crash Render - Algorithme Yély) :
+      // 1. Suppression de tous les guillemets superflus
+      // 2. Suppression des retours chariot Windows (\r)
+      // 3. Transformation des '\n' littéraux en véritables sauts de ligne système
+      const cleanKey = rawKey
+        .replace(/["']/g, '')
         .replace(/\r/g, '')
         .replace(/\\n/g, '\n');
 
@@ -38,15 +51,16 @@ try {
         credential: admin.credential.cert({
           projectId: projectId.trim(),
           clientEmail: clientEmail.trim(),
-          privateKey: cleanPrivateKey,
+          privateKey: cleanKey,
         }),
       });
 
-      console.log('[FIREBASE] Admin SDK initialisé avec succès');
+      console.log('[FIREBASE] Moteur Push initialisé avec succès');
     }
   }
 } catch (error) {
-  console.error('[FIREBASE] Erreur fatale initialisation:', error.message);
+  console.error('ERREUR FATALE: Impossible d\'initialiser Firebase !');
+  console.error(error.message);
 }
 
 module.exports = admin;
