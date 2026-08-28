@@ -15,6 +15,9 @@ const io = new Server(server, {
     }
 });
 
+const notificationService = require('./services/notificationService');
+notificationService.setIo(io);
+
 app.set('io', io);
 
 io.on('connection', (socket) => {

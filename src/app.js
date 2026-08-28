@@ -14,6 +14,7 @@ const friendRoutes = require('./routes/friendRoutes');
 const chatRoutes = require('./routes/chatRoutes');
 const shopRoutes = require('./routes/shopRoutes');
 const duelRoutes = require('./routes/duelRoutes');
+const notificationRoutes = require('./routes/notificationRoutes');
 
 const app = express();
 
@@ -56,6 +57,7 @@ app.use('/api/friends', friendRoutes);
 app.use('/api/chat', chatRoutes);
 app.use('/api/shop', shopRoutes);
 app.use('/api/duel', duelRoutes);
+app.use('/api/notifications', notificationRoutes);
 
 app.get('/api/health', (req, res) => {
     res.status(200).json({ status: 'success', message: 'Le serveur 2Mots est opérationnel et sécurisé.' });

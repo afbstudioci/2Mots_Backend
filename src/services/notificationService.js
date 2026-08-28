@@ -1,9 +1,18 @@
 //src/services/notificationService.js
 const https = require('https');
 const User = require('../models/User');
+const Notification = require('../models/Notification');
 const admin = require('../config/firebase');
 
 const PUSH_CHANNEL_ID = 'default';
+let ioInstance = null;
+
+/**
+ * Injection de l'instance Socket.io pour diffusion temps réel
+ */
+exports.setIo = (io) => {
+    ioInstance = io;
+};
 
 /**
  * Envoi de secours via Expo Push API
@@ -52,40 +61,72 @@ const sendExpoPush = (pushToken, title, body, data) => {
 };
 
 /**
- * Service centralisé d'envoi de notifications push résilient (Standard Yély)
+ * Moteur Hybride Bank-Grade (Standard Yély) :
+ * 1. Persistance DB (Notification.create avec TTL 30j)
+ * 2. Push Système FCM v1 / Expo
+ * 3. Diffusion Temps Réel In-App (Socket.io)
  */
-const send = async (recipientId, title, body, rawData = {}) => {
+exports.sendNotification = async (recipientId, title, body, type = 'general', rawData = {}, senderId = null) => {
+    let savedNotification = null;
+
+    // ÉTAPE 1 : Persistance DB
     try {
-        const user = await User.findById(recipientId).select('fcmToken login').lean();
+        savedNotification = await Notification.create({
+            recipient: recipientId,
+            sender: senderId,
+            title,
+            body,
+            type,
+            data: rawData
+        });
+    } catch (dbErr) {
+        console.warn('[NOTIF_DB] Erreur persistance notification:', dbErr.message);
+    }
+
+    // ÉTAPE 2 : Diffusion Temps Réel Socket.io
+    try {
+        if (ioInstance) {
+            ioInstance.to(String(recipientId)).emit('notification_received', savedNotification || {
+                recipient: recipientId,
+                title,
+                body,
+                type,
+                data: rawData,
+                createdAt: new Date()
+            });
+        }
+    } catch (sockErr) {
+        console.warn('[NOTIF_SOCKET] Erreur émission temps réel:', sockErr.message);
+    }
+
+    // ÉTAPE 3 : Push Notification Mobile (FCM v1 / Expo)
+    try {
+        const user = await User.findById(recipientId).select('+fcmToken login').lean();
         if (!user || !user.fcmToken) {
             console.log(`[PUSH] Destinataire ${recipientId} sans fcmToken.`);
-            return;
+            return savedNotification;
         }
 
         const token = String(user.fcmToken).trim();
-        if (!token) return;
+        if (!token) return savedNotification;
 
         const sanitizedData = {};
         for (const [key, value] of Object.entries(rawData)) {
             sanitizedData[key] = value !== undefined && value !== null ? String(value) : '';
         }
 
-        // Support Fallback Expo Push Tokens
         if (token.startsWith('ExponentPushToken') || token.startsWith('ExpoPushToken')) {
             console.log(`[PUSH] Envoi Expo Push à ${user.login}`);
             await sendExpoPush(token, title, body, sanitizedData);
-            return;
+            return savedNotification;
         }
 
-        // Payload Standard FCM v1 (Multiplateforme)
         const message = {
-            notification: {
-                title,
-                body
-            },
+            notification: { title, body },
             data: {
                 title: String(title),
                 body: String(body),
+                type: String(type),
                 ...sanitizedData
             },
             android: {
@@ -123,82 +164,72 @@ const send = async (recipientId, title, body, rawData = {}) => {
         }
     } catch (error) {
         console.warn(`[PUSH] Erreur envoi push pour ${recipientId}: [${error.code || 'UNKNOWN'}] ${error.message}`);
-        
-        // On ne purge le token QUE si Firebase confirme que le token est définitivement désenregistré
         if (error.code === 'messaging/registration-token-not-registered') {
             console.warn(`[PUSH] Token désenregistré pour ${recipientId}, nettoyage en base.`);
             await User.findByIdAndUpdate(recipientId, { $unset: { fcmToken: 1 } });
-        } else if (error.code === 'messaging/mismatched-credential') {
-            console.error('[PUSH] ERREUR CRITIQUE: Le Service Account Firebase (Render) ne correspond pas au projet de l\'application !');
         }
     }
+
+    return savedNotification;
 };
 
 // --- Notifications Événements Duel ---
 
-exports.onDuelInvite = async (recipientId, challengerName, betAmount, duelId) => {
-    await send(recipientId, 'Défi en Duel !', `${challengerName} vous défie en Duel pour ${betAmount} Kevs !`, {
-        type: 'duel_invite',
+exports.onDuelInvite = async (recipientId, challengerName, betAmount, duelId, challengerId = null) => {
+    await exports.sendNotification(recipientId, 'Défi en Duel !', `${challengerName} vous défie en Duel pour ${betAmount} Kevs !`, 'duel_invite', {
         challengerName,
         betAmount: String(betAmount),
         duelId: String(duelId)
-    });
+    }, challengerId);
 };
 
-exports.onDuelAccepted = async (challengerId, opponentName, duelId) => {
-    await send(challengerId, 'Défi accepté !', `${opponentName} a accepté votre défi ! Rejoignez l'arène de jeu !`, {
-        type: 'duel_accepted',
+exports.onDuelAccepted = async (challengerId, opponentName, duelId, opponentId = null) => {
+    await exports.sendNotification(challengerId, 'Défi accepté !', `${opponentName} a accepté votre défi ! Rejoignez l'arène !`, 'duel_accepted', {
         opponentName,
         duelId: String(duelId)
-    });
+    }, opponentId);
 };
 
-exports.onDuelRejected = async (challengerId, opponentName) => {
-    await send(challengerId, 'Défi décliné', `${opponentName} a refusé votre invitation.`, {
-        type: 'duel_rejected',
+exports.onDuelRejected = async (challengerId, opponentName, opponentId = null) => {
+    await exports.sendNotification(challengerId, 'Défi décliné', `${opponentName} a refusé votre invitation.`, 'duel_rejected', {
         opponentName
-    });
+    }, opponentId);
 };
 
 // --- Notifications Sociales et Messages ---
 
-exports.onNewMessage = async (recipientId, senderName, messageText, type) => {
+exports.onNewMessage = async (recipientId, senderName, messageText, type, senderId = null) => {
     const bodyMap = {
         text: messageText,
         image: 'a envoyé une photo',
         video: 'a envoyé une vidéo',
         audio: 'a envoyé un message vocal'
     };
-    await send(recipientId, senderName, bodyMap[type] || messageText, {
-        type: 'chat_message',
+    await exports.sendNotification(recipientId, senderName, bodyMap[type] || messageText, 'chat_message', {
         senderName
-    });
+    }, senderId);
 };
 
-exports.onFriendRequestSent = async (recipientId, senderName) => {
-    await send(recipientId, 'Nouvelle demande d\'ami', `${senderName} souhaite devenir votre ami !`, {
-        type: 'friend_request',
+exports.onFriendRequestSent = async (recipientId, senderName, senderId = null) => {
+    await exports.sendNotification(recipientId, 'Nouvelle demande d\'ami', `${senderName} souhaite devenir votre ami !`, 'friend_request', {
         senderName
-    });
+    }, senderId);
 };
 
-exports.onFriendRequestAccepted = async (requesterId, accepterName) => {
-    await send(requesterId, 'Demande acceptée !', `${accepterName} et vous êtes maintenant amis !`, {
-        type: 'friend_accepted',
+exports.onFriendRequestAccepted = async (requesterId, accepterName, accepterId = null) => {
+    await exports.sendNotification(requesterId, 'Demande acceptée !', `${accepterName} et vous êtes maintenant amis !`, 'friend_accepted', {
         accepterName
-    });
+    }, accepterId);
 };
 
 exports.onLevelUp = async (userId, newLevel) => {
-    await send(userId, 'Niveau supérieur !', `Félicitations ! Vous avez atteint le niveau ${newLevel} !`, {
-        type: 'level_up',
+    await exports.sendNotification(userId, 'Niveau supérieur !', `Félicitations ! Vous avez atteint le niveau ${newLevel} !`, 'level_up', {
         level: String(newLevel)
     });
 };
 
 exports.onMissionComplete = async (userId, missionTitle) => {
-    await send(userId, 'Mission terminée !', `"${missionTitle}" est prête à être réclamée !`, {
-        type: 'mission_complete',
+    await exports.sendNotification(userId, 'Mission terminée !', `"${missionTitle}" est prête à être réclamée !`, 'mission_complete', {
         missionTitle
     });
 };

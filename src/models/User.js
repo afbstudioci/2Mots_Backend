@@ -90,7 +90,8 @@ const userSchema = new mongoose.Schema({
     },
     fcmToken: {
         type: String,
-        default: null
+        default: null,
+        select: false
     },
     blockedUsers: [{
         type: mongoose.Schema.Types.ObjectId,
