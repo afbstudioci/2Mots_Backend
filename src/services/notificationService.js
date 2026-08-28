@@ -83,7 +83,11 @@ const send = async (recipientId, title, body, rawData = {}) => {
                 title,
                 body
             },
-            data: sanitizedData,
+            data: {
+                title: String(title),
+                body: String(body),
+                ...sanitizedData
+            },
             android: {
                 priority: 'high',
                 notification: {
