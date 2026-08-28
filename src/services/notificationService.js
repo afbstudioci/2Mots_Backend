@@ -122,23 +122,22 @@ exports.sendNotification = async (recipientId, title, body, type = 'general', ra
         }
 
         const message = {
-            notification: { title, body },
+            notification: {
+                title,
+                body
+            },
             data: {
                 title: String(title),
                 body: String(body),
                 type: String(type),
+                click_action: 'FLUTTER_NOTIFICATION_CLICK',
                 ...sanitizedData
             },
             android: {
                 priority: 'high',
                 notification: {
-                    title,
-                    body,
                     channelId: PUSH_CHANNEL_ID,
-                    priority: 'max',
-                    defaultSound: true,
-                    defaultVibrateTimings: true,
-                    visibility: 'public',
+                    sound: 'default',
                     color: '#FF7F50'
                 }
             },
