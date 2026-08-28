@@ -22,7 +22,8 @@ try {
         });
 
         initialized = true;
-        console.log('[FIREBASE] Moteur Push initialisé avec succès (via Service Account JSON)');
+        const activeProjectId = serviceAccount.project_id || 'non_spécifié';
+        console.log(`[FIREBASE] Moteur Push initialisé avec succès (via Service Account JSON, Projet : ${activeProjectId})`);
       } catch (err) {
         console.warn('[FIREBASE] Avertissement parsing Service Account JSON, tentative avec variables individuelles...');
       }
@@ -55,7 +56,7 @@ try {
         }),
       });
 
-      console.log('[FIREBASE] Moteur Push initialisé avec succès');
+      console.log(`[FIREBASE] Moteur Push initialisé avec succès (Projet : ${projectId.trim()})`);
     }
   }
 } catch (error) {

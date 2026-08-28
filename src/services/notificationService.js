@@ -3,7 +3,7 @@ const https = require('https');
 const User = require('../models/User');
 const admin = require('../config/firebase');
 
-const PUSH_CHANNEL_ID = 'twomots_alerts_v2';
+const PUSH_CHANNEL_ID = 'default';
 
 /**
  * Envoi de secours via Expo Push API
@@ -52,7 +52,7 @@ const sendExpoPush = (pushToken, title, body, data) => {
 };
 
 /**
- * Service centralisé d'envoi de notifications push résilient
+ * Service centralisé d'envoi de notifications push résilient (Standard Yély)
  */
 const send = async (recipientId, title, body, rawData = {}) => {
     try {
@@ -63,17 +63,21 @@ const send = async (recipientId, title, body, rawData = {}) => {
         }
 
         const token = String(user.fcmToken).trim();
+        if (!token) return;
+
         const sanitizedData = {};
         for (const [key, value] of Object.entries(rawData)) {
             sanitizedData[key] = value !== undefined && value !== null ? String(value) : '';
         }
 
+        // Support Fallback Expo Push Tokens
         if (token.startsWith('ExponentPushToken') || token.startsWith('ExpoPushToken')) {
             console.log(`[PUSH] Envoi Expo Push à ${user.login}`);
             await sendExpoPush(token, title, body, sanitizedData);
             return;
         }
 
+        // Payload Standard FCM v1 (Multiplateforme)
         const message = {
             notification: {
                 title,
@@ -97,7 +101,8 @@ const send = async (recipientId, title, body, rawData = {}) => {
                 payload: {
                     aps: {
                         sound: 'default',
-                        badge: 1
+                        badge: 1,
+                        contentAvailable: true
                     }
                 }
             },
@@ -105,7 +110,7 @@ const send = async (recipientId, title, body, rawData = {}) => {
         };
 
         if (admin.apps && admin.apps.length > 0) {
-            console.log(`[PUSH] Envoi FCM v1 à ${user.login}`);
+            console.log(`[PUSH] Envoi FCM v1 à ${user.login} (${recipientId})`);
             const response = await admin.messaging().send(message);
             console.log(`[PUSH] Succès FCM ID: ${response}`);
         } else {
@@ -113,14 +118,14 @@ const send = async (recipientId, title, body, rawData = {}) => {
             await sendExpoPush(token, title, body, sanitizedData);
         }
     } catch (error) {
-        if (
-            error.code === 'messaging/registration-token-not-registered' ||
-            error.code === 'messaging/invalid-registration-token'
-        ) {
-            console.warn(`[PUSH] Token expiré ou invalide pour ${recipientId}, purge en base.`);
+        console.warn(`[PUSH] Erreur envoi push pour ${recipientId}: [${error.code || 'UNKNOWN'}] ${error.message}`);
+        
+        // On ne purge le token QUE si Firebase confirme que le token est définitivement désenregistré
+        if (error.code === 'messaging/registration-token-not-registered') {
+            console.warn(`[PUSH] Token désenregistré pour ${recipientId}, nettoyage en base.`);
             await User.findByIdAndUpdate(recipientId, { $unset: { fcmToken: 1 } });
-        } else {
-            console.warn('[PUSH] Erreur envoi push:', error.message);
+        } else if (error.code === 'messaging/mismatched-credential') {
+            console.error('[PUSH] ERREUR CRITIQUE: Le Service Account Firebase (Render) ne correspond pas au projet de l\'application !');
         }
     }
 };

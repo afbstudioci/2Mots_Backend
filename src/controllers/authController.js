@@ -155,14 +155,15 @@ exports.forgotPassword = async (req, res) => {
 
 exports.updateFcmToken = async (req, res) => {
     try {
-        const { fcmToken } = req.body;
+        const rawToken = req.body.fcmToken || req.body.token;
         const User = require('../models/User');
         const userId = req.user?._id || req.user?.id;
-        if (fcmToken && userId) {
-            await User.findByIdAndUpdate(userId, { fcmToken: String(fcmToken).trim() });
-            console.log(`[AUTH] Token FCM mis à jour pour l'utilisateur ${userId}`);
+        if (rawToken && userId) {
+            const cleanToken = String(rawToken).trim();
+            await User.findByIdAndUpdate(userId, { fcmToken: cleanToken });
+            console.log(`[AUTH] Token FCM synchronisé pour l'utilisateur ${userId}`);
         }
-        return res.status(200).json({ status: 'success', message: 'Token FCM synchronisé.' });
+        return res.status(200).json({ status: 'success', message: 'Token FCM synchronisé avec succès.' });
     } catch (error) {
         return res.status(400).json({ status: 'fail', message: error.message });
     }

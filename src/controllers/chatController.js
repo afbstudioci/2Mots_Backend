@@ -55,10 +55,14 @@ exports.uploadMedia = async (req, res) => {
  */
 exports.updateFCMToken = async (req, res) => {
     try {
-        const { token } = req.body;
-        const user = await require('../models/User').findById(req.user.id);
-        user.fcmToken = token;
-        await user.save();
+        const rawToken = req.body.fcmToken || req.body.token;
+        const User = require('../models/User');
+        const userId = req.user?.id || req.user?._id;
+        if (rawToken && userId) {
+            const cleanToken = String(rawToken).trim();
+            await User.findByIdAndUpdate(userId, { fcmToken: cleanToken });
+            console.log(`[CHAT] Token FCM synchronisé pour l'utilisateur ${userId}`);
+        }
         res.status(200).json({ status: 'success', message: 'Token FCM mis à jour avec succès' });
     } catch (error) {
         res.status(500).json({ status: 'error', message: error.message });
