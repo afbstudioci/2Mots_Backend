@@ -133,6 +133,7 @@ const userSchema = new mongoose.Schema({
 }, { timestamps: true, versionKey: false });
 
 userSchema.index({ 'playedWords.word': 1, 'playedWords.cooldownUntil': 1 });
+userSchema.index({ level: -1, isBanned: 1 });
 
 userSchema.pre('save', async function () {
     if (this.isModified('password')) {
