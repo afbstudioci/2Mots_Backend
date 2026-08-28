@@ -17,6 +17,14 @@ try {
           ? JSON.parse(raw)
           : JSON.parse(Buffer.from(raw, 'base64').toString('utf8'));
 
+        // NETTOYAGE ESSENTIEL DE LA CLÉ RSA (Anti-Invalid JWT Signature)
+        if (serviceAccount.private_key) {
+          serviceAccount.private_key = serviceAccount.private_key
+            .replace(/\\n/g, '\n')
+            .replace(/\r/g, '')
+            .trim();
+        }
+
         admin.initializeApp({
           credential: admin.credential.cert(serviceAccount),
         });
@@ -25,7 +33,7 @@ try {
         const activeProjectId = serviceAccount.project_id || 'non_spécifié';
         console.log(`[FIREBASE] Moteur Push initialisé avec succès (via Service Account JSON, Projet : ${activeProjectId})`);
       } catch (err) {
-        console.warn('[FIREBASE] Avertissement parsing Service Account JSON, tentative avec variables individuelles...');
+        console.warn('[FIREBASE] Avertissement parsing Service Account JSON, tentative avec variables individuelles...', err.message);
       }
     }
 
