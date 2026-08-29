@@ -124,18 +124,20 @@ exports.finishDuel = async (duelId) => {
     if (duel.scores.challenger > duel.scores.opponent) {
         duel.winner = duel.challenger;
         duel.isDraw = false;
-        await User.updateOne({ _id: duel.challenger }, { $inc: { kevs: duel.totalPot, xp: 50 } });
+        await Promise.all([
+            User.updateOne({ _id: duel.opponent }, { $inc: { kevs: -duel.betAmount } }),
+            User.updateOne({ _id: duel.challenger }, { $inc: { kevs: duel.betAmount, xp: 50 } })
+        ]);
     } else if (duel.scores.opponent > duel.scores.challenger) {
         duel.winner = duel.opponent;
         duel.isDraw = false;
-        await User.updateOne({ _id: duel.opponent }, { $inc: { kevs: duel.totalPot, xp: 50 } });
+        await Promise.all([
+            User.updateOne({ _id: duel.challenger }, { $inc: { kevs: -duel.betAmount } }),
+            User.updateOne({ _id: duel.opponent }, { $inc: { kevs: duel.betAmount, xp: 50 } })
+        ]);
     } else {
         duel.isDraw = true;
         duel.winner = null;
-        await Promise.all([
-            User.updateOne({ _id: duel.challenger }, { $inc: { kevs: duel.betAmount } }),
-            User.updateOne({ _id: duel.opponent }, { $inc: { kevs: duel.betAmount } })
-        ]);
     }
 
     await duel.save();

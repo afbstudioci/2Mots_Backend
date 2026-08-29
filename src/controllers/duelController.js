@@ -5,7 +5,7 @@ const DuelSession = require('../models/DuelSession');
 
 const inviteSchema = z.object({
     opponentId: z.string().min(1, "L'identifiant de l'adversaire est obligatoire."),
-    betAmount: z.number().int().min(10, 'La mise minimale est de 10 Kevs.').max(1000, 'La mise maximale est de 1000 Kevs.')
+    betAmount: z.number().int().min(5, 'La mise minimale est de 5 Kevs.').max(100000, 'La mise maximale est de 100 000 Kevs.')
 });
 
 const respondSchema = z.object({

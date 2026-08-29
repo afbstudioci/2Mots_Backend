@@ -108,22 +108,18 @@ exports.respondToDuelInvite = async (opponentId, duelId, accept) => {
         return { status: 'rejected', duelId: duel._id, challenger: duel.challenger };
     }
 
-    const challengerDebit = await User.updateOne(
-        { _id: duel.challenger._id, kevs: { $gte: duel.betAmount } },
-        { $inc: { kevs: -duel.betAmount } }
-    );
-    if (challengerDebit.modifiedCount === 0) {
+    const [challengerUser, opponentUser] = await Promise.all([
+        User.findById(duel.challenger._id).select('kevs'),
+        User.findById(duel.opponent._id).select('kevs')
+    ]);
+
+    if (!challengerUser || challengerUser.kevs < duel.betAmount) {
         duel.status = 'cancelled';
         await duel.save();
         throw new Error('Le challenger n\'a plus assez de Kevs pour ce duel.');
     }
 
-    const opponentDebit = await User.updateOne(
-        { _id: duel.opponent._id, kevs: { $gte: duel.betAmount } },
-        { $inc: { kevs: -duel.betAmount } }
-    );
-    if (opponentDebit.modifiedCount === 0) {
-        await User.updateOne({ _id: duel.challenger._id }, { $inc: { kevs: duel.betAmount } });
+    if (!opponentUser || opponentUser.kevs < duel.betAmount) {
         duel.status = 'cancelled';
         await duel.save();
         throw new Error('Vous n\'avez plus assez de Kevs pour accepter ce duel.');
