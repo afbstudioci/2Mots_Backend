@@ -1,8 +1,11 @@
-//src/controllers/notificationController.js
+// src/controllers/notificationController.js
+// GESTION DE L'HISTORIQUE DES NOTIFICATIONS
+// STANDARD: Industriel / Bank Grade (Strict <= 270 lignes)
+
 const Notification = require('../models/Notification');
 
 /**
- * Récupère les notifications paginées de l'utilisateur avec compteur non-lues
+ * Recupere les notifications pagineees de l'utilisateur avec compteur non-lues
  */
 exports.getNotifications = async (req, res, next) => {
     try {
@@ -19,7 +22,7 @@ exports.getNotifications = async (req, res, next) => {
                 .populate('sender', 'login avatar level')
                 .lean(),
             Notification.countDocuments({ recipient: userId }),
-            Notification.countDocuments({ recipient: userId, isRead: false })
+            Notification.countDocuments({ recipient: userId, read: false })
         ]);
 
         return res.status(200).json({
@@ -50,15 +53,15 @@ exports.markAsRead = async (req, res, next) => {
 
         if (id === 'all') {
             await Notification.updateMany(
-                { recipient: userId, isRead: false },
-                { isRead: true, readAt: new Date() }
+                { recipient: userId, read: false },
+                { read: true }
             );
-            return res.status(200).json({ status: 'success', message: 'Toutes les notifications sont marquées comme lues.' });
+            return res.status(200).json({ status: 'success', message: 'Toutes les notifications sont marquees comme lues.' });
         }
 
         const notification = await Notification.findOneAndUpdate(
             { _id: id, recipient: userId },
-            { isRead: true, readAt: new Date() },
+            { read: true },
             { new: true }
         );
 
@@ -82,7 +85,7 @@ exports.deleteNotification = async (req, res, next) => {
 
         if (id === 'all') {
             await Notification.deleteMany({ recipient: userId });
-            return res.status(200).json({ status: 'success', message: 'Toutes les notifications ont été supprimées.' });
+            return res.status(200).json({ status: 'success', message: 'Toutes les notifications ont ete supprimees.' });
         }
 
         const result = await Notification.findOneAndDelete({ _id: id, recipient: userId });
@@ -90,7 +93,7 @@ exports.deleteNotification = async (req, res, next) => {
             return res.status(404).json({ status: 'fail', message: 'Notification introuvable.' });
         }
 
-        return res.status(200).json({ status: 'success', message: 'Notification supprimée avec succès.' });
+        return res.status(200).json({ status: 'success', message: 'Notification supprimee avec succes.' });
     } catch (error) {
         next(error);
     }

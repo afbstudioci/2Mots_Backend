@@ -168,6 +168,20 @@ exports.updateFcmToken = async (req, res) => {
         return res.status(400).json({ status: 'fail', message: error.message });
     }
 };
+
+exports.removeFcmToken = async (req, res) => {
+    try {
+        const User = require('../models/User');
+        const userId = req.user?._id || req.user?.id;
+        if (userId) {
+            await User.findByIdAndUpdate(userId, { $unset: { fcmToken: 1 } });
+            console.log(`[AUTH] Token FCM supprimé pour l'utilisateur ${userId}`);
+        }
+        return res.status(200).json({ status: 'success', message: 'Token FCM supprimé avec succès.' });
+    } catch (error) {
+        return res.status(400).json({ status: 'fail', message: error.message });
+    }
+};
 exports.deleteAccount = async (req, res) => {
     try {
         const userId = req.user.id || req.user._id;

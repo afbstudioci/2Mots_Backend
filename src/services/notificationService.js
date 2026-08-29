@@ -1,6 +1,6 @@
 // src/services/notificationService.js
 // MOTEUR DE NOTIFICATIONS HYBRIDE (DB + FCM PUSH V1 + SOCKET.IO)
-// STANDARD: Industriel / Bank Grade (Strict <= 325 lignes)
+// STANDARD: Industriel / Bank Grade (Strict <= 270 lignes)
 
 const https = require('https');
 const User = require('../models/User');
@@ -10,16 +10,10 @@ const admin = require('../config/firebase');
 const PUSH_CHANNEL_ID = 'twomots_alerts_v3';
 let ioInstance = null;
 
-/**
- * Injection de l'instance Socket.io pour diffusion temps reel
- */
 exports.setIo = (io) => {
     ioInstance = io;
 };
 
-/**
- * Envoi de secours via Expo Push API
- */
 const sendExpoPush = (pushToken, title, body, data) => {
     return new Promise((resolve) => {
         const payload = JSON.stringify({
@@ -63,16 +57,10 @@ const sendExpoPush = (pushToken, title, body, data) => {
     });
 };
 
-/**
- * Moteur Hybride Bank-Grade (Standard Yely) :
- * 1. Persistance DB (Notification.create avec TTL 30j)
- * 2. Push Systeme FCM v1 / Expo
- * 3. Diffusion Temps Reel In-App (Socket.io)
- */
 exports.sendNotification = async (recipientId, title, body, type = 'general', rawData = {}, senderId = null) => {
     let savedNotification = null;
 
-    // ETAPE 1 : Persistance DB
+    // 1. Persistance DB
     try {
         savedNotification = await Notification.create({
             recipient: recipientId,
@@ -86,7 +74,7 @@ exports.sendNotification = async (recipientId, title, body, type = 'general', ra
         console.warn('[NOTIF_DB] Erreur persistance notification:', dbErr.message);
     }
 
-    // ETAPE 2 : Diffusion Temps Reel Socket.io
+    // 2. Diffusion Temps Reel Socket.io
     try {
         if (ioInstance) {
             ioInstance.to(String(recipientId)).emit('notification_received', savedNotification || {
@@ -102,7 +90,7 @@ exports.sendNotification = async (recipientId, title, body, type = 'general', ra
         console.warn('[NOTIF_SOCKET] Erreur emission temps reel:', sockErr.message);
     }
 
-    // ETAPE 3 : Push Notification Mobile (FCM v1 / Expo)
+    // 3. Push Mobile FCM v1 / Expo
     try {
         const user = await User.findById(recipientId).select('+fcmToken login').lean();
         if (!user || !user.fcmToken) {
@@ -175,8 +163,7 @@ exports.sendNotification = async (recipientId, title, body, type = 'general', ra
     return savedNotification;
 };
 
-// --- Notifications Evenements Duel ---
-
+// Evenements Metiers
 exports.onDuelInvite = async (recipientId, challengerName, betAmount, duelId, challengerId = null) => {
     await exports.sendNotification(recipientId, 'Defi en Duel !', `${challengerName} vous defie en Duel pour ${betAmount} Kevs !`, 'duel_invite', {
         challengerName,
@@ -198,8 +185,6 @@ exports.onDuelRejected = async (challengerId, opponentName, opponentId = null) =
     }, opponentId);
 };
 
-// --- Notifications Sociales et Messages ---
-
 exports.onNewMessage = async (recipientId, senderName, messageText, type, senderId = null) => {
     const bodyMap = {
         text: messageText,
@@ -213,7 +198,7 @@ exports.onNewMessage = async (recipientId, senderName, messageText, type, sender
 };
 
 exports.onFriendRequestSent = async (recipientId, senderName, senderId = null) => {
-    await exports.sendNotification(recipientId, 'Nouvelle demande d\'ami', `${senderName} souhaite devenir votre ami !`, 'friend_request', {
+    await exports.sendNotification(recipientId, "Nouvelle demande d'ami", `${senderName} souhaite devenir votre ami !`, 'friend_request', {
         senderName
     }, senderId);
 };
