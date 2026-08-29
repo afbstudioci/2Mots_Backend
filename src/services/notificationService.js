@@ -33,6 +33,9 @@ const sanitizeDataPayload = (rawData = {}) => {
 };
 
 // Construction du payload FCM v1 valide (sans attributs invalides)
+// On utilise 'default' comme channelId car ce canal est TOUJOURS créé
+// automatiquement par Android. 'twomots_alerts_v3' est déclaré en fallback
+// dans le manifest via app.json > defaultChannel.
 const buildFcmMessage = (token, title, body, type, sanitizedData) => ({
     notification: {
         title: String(title),
@@ -47,7 +50,7 @@ const buildFcmMessage = (token, title, body, type, sanitizedData) => ({
     android: {
         priority: 'high',
         notification: {
-            channelId: PUSH_CHANNEL_ID,
+            channelId: 'default',
             sound: 'default',
             color: '#FF7F50',
         },
