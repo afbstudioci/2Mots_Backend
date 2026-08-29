@@ -174,13 +174,45 @@ exports.cancelInactiveDuel = async (req, res, next) => {
         if (io) {
             io.to(`duel_${duelId}`).emit('duel_cancelled', {
                 duelId: String(duelId),
-                message: "Le duel a été annulé en raison de l'inactivité de l'adversaire. Vos mises ont été remboursées."
+                message: "Le duel a été annulé."
             });
+            io.to(String(result.challenger)).emit('duel_session_ended', { duelId: String(duelId) });
+            io.to(String(result.opponent)).emit('duel_session_ended', { duelId: String(duelId) });
         }
 
         res.status(200).json({
             status: 'success',
-            message: 'Duel annulé et mises remboursées.',
+            message: 'Duel annulé.',
+            data: result
+        });
+    } catch (error) {
+        next(error);
+    }
+};
+
+exports.forfeitDuel = async (req, res, next) => {
+    try {
+        const { duelId } = req.body;
+        if (!duelId) {
+            return res.status(400).json({ status: 'fail', message: 'Identifiant du duel requis.' });
+        }
+        const result = await duelService.forfeitDuel(req.user._id, duelId);
+        const io = req.app.get('io');
+        if (io) {
+            io.to(`duel_${duelId}`).emit('duel_forfeited', {
+                duelId: String(duelId),
+                forfeiterId: String(result.forfeiterId),
+                opponentId: String(result.opponentId),
+                penaltyKevs: result.penaltyKevs,
+                winnerName: result.winnerName
+            });
+            io.to(String(result.forfeiterId)).emit('duel_session_ended', { duelId: String(duelId) });
+            io.to(String(result.opponentId)).emit('duel_session_ended', { duelId: String(duelId) });
+        }
+
+        res.status(200).json({
+            status: 'success',
+            message: 'Duel abandonné avec succès.',
             data: result
         });
     } catch (error) {

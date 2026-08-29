@@ -225,18 +225,52 @@ exports.cancelInactiveDuel = async (userId, duelId) => {
         throw new Error('Duel introuvable ou déjà démarré.');
     }
 
-    if (duel.status === 'ready') {
-        await Promise.all([
-            User.updateOne({ _id: duel.challenger }, { $inc: { kevs: duel.betAmount } }),
-            User.updateOne({ _id: duel.opponent }, { $inc: { kevs: duel.betAmount } })
-        ]);
-    }
-
     duel.status = 'cancelled';
     duel.endedAt = new Date();
     await duel.save();
 
     return duel;
+};
+
+exports.forfeitDuel = async (userId, duelId) => {
+    const duel = await DuelSession.findOne({
+        _id: duelId,
+        $or: [{ challenger: userId }, { opponent: userId }],
+        status: { $in: ['ready', 'in_progress', 'pending'] }
+    });
+
+    if (!duel) {
+        throw new Error('Duel introuvable ou déjà terminé.');
+    }
+
+    const isChallenger = String(userId) === String(duel.challenger);
+    const forfeiterId = String(userId);
+    const opponentId = String(isChallenger ? duel.opponent : duel.challenger);
+
+    // Pénalité stricte de 15% de la mise (Minimum 1 Kev)
+    const penalty = Math.max(1, Math.ceil(duel.betAmount * 0.15));
+
+    // Débit de 15% sur celui qui abandonne et crédit de 15% à l'adversaire
+    await Promise.all([
+        User.updateOne({ _id: forfeiterId }, { $inc: { kevs: -penalty } }),
+        User.updateOne({ _id: opponentId }, { $inc: { kevs: penalty, xp: 20 } })
+    ]);
+
+    duel.status = 'completed';
+    duel.winner = opponentId;
+    duel.endedAt = new Date();
+    await duel.save();
+
+    const populatedDuel = await DuelSession.findById(duel._id)
+        .populate('challenger opponent winner', 'login avatar level');
+
+    return {
+        duel: populatedDuel,
+        forfeiterId,
+        opponentId,
+        penaltyKevs: penalty,
+        winnerName: isChallenger ? populatedDuel.opponent?.login : populatedDuel.challenger?.login
+    };
 };
 
 // Re-export arena gameplay engine methods

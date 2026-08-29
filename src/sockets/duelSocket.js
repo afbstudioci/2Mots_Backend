@@ -2,9 +2,11 @@
 const duelService = require('../services/duelService');
 const DuelSession = require('../models/DuelSession');
 
-// Mémoire locale de présence et timers pour les rooms de duel
+// Mémoire locale de présence, timers de buzzer et timers de déconnexion
 const roomPresences = new Map(); // duelId -> Set of userIds
 const buzzerTimeouts = new Map(); // duelId -> Timeout
+const disconnectTimers = new Map(); // `${duelId}_${userId}` -> Timeout
+const socketDuelMap = new Map(); // socket.id -> { duelId, userId }
 
 module.exports = (io, socket) => {
     socket.on('duel_join', async ({ duelId, userId }) => {
@@ -15,6 +17,16 @@ module.exports = (io, socket) => {
             const roomName = `duel_${strDuelId}`;
 
             socket.join(roomName);
+            socketDuelMap.set(socket.id, { duelId: strDuelId, userId: strUserId });
+
+            // Annulation du timer d'abandon si le joueur s'est reconnecté dans les 15 secondes
+            const disconnectKey = `${strDuelId}_${strUserId}`;
+            if (disconnectTimers.has(disconnectKey)) {
+                clearTimeout(disconnectTimers.get(disconnectKey));
+                disconnectTimers.delete(disconnectKey);
+                io.to(roomName).emit('duel_player_reconnected', { userId: strUserId });
+                console.log(`[SOCKET_DUEL] Joueur ${strUserId} reconnecté à temps au duel ${strDuelId}`);
+            }
 
             if (!roomPresences.has(strDuelId)) {
                 roomPresences.set(strDuelId, new Set());
@@ -74,7 +86,6 @@ module.exports = (io, socket) => {
                     expiresAt: duel.activeBuzzer.expiresAt
                 });
 
-                // Auto-expiration au bout de 3.2s si aucune réponse n'est soumise
                 const timeout = setTimeout(async () => {
                     await duelService.releaseBuzzer(strDuelId);
                     io.to(`duel_${strDuelId}`).emit('duel_buzzer_expired', {
@@ -103,22 +114,25 @@ module.exports = (io, socket) => {
             }
 
             const result = await duelService.submitAnswer(strDuelId, userId, answer);
-            io.to(`duel_${strDuelId}`).emit('duel_answer_result', {
-                userId,
-                isCorrect: result.isCorrect,
-                scores: result.scores,
-                currentEnigmaIndex: result.currentEnigmaIndex,
-                nextEnigma: result.nextEnigma,
-                isLastEnigma: result.isLastEnigma
-            });
-
-            if (result.isLastEnigma) {
-                const finalSummary = await duelService.finishDuel(strDuelId);
-                io.to(`duel_${strDuelId}`).emit('duel_game_over', {
-                    duel: finalSummary,
-                    reason: 'all_enigmas_completed'
+            if (result) {
+                io.to(`duel_${strDuelId}`).emit('duel_answer_result', {
+                    userId,
+                    answer,
+                    isCorrect: result.isCorrect,
+                    scores: result.scores,
+                    currentEnigmaIndex: result.currentEnigmaIndex,
+                    nextEnigma: result.nextEnigma,
+                    isLastEnigma: result.isLastEnigma
                 });
-                roomPresences.delete(strDuelId);
+
+                if (result.isLastEnigma) {
+                    const finalSummary = await duelService.finishDuel(strDuelId);
+                    io.to(`duel_${strDuelId}`).emit('duel_game_over', {
+                        duel: finalSummary,
+                        reason: 'all_enigmas_completed'
+                    });
+                    roomPresences.delete(strDuelId);
+                }
             }
         } catch (error) {
             console.error('[SOCKET_DUEL] Erreur submit answer:', error.message);
@@ -179,18 +193,70 @@ module.exports = (io, socket) => {
     socket.on('duel_forfeit', async ({ duelId, userId }) => {
         try {
             const strDuelId = String(duelId);
-            const duel = await DuelSession.findById(strDuelId);
-            if (duel && (duel.status === 'in_progress' || duel.status === 'ready')) {
-                const finalSummary = await duelService.finishDuel(strDuelId);
-                io.to(`duel_${strDuelId}`).emit('duel_game_over', {
-                    duel: finalSummary,
-                    forfeitBy: userId,
-                    reason: 'forfeit'
+            const result = await duelService.forfeitDuel(userId, strDuelId);
+            if (result) {
+                io.to(`duel_${strDuelId}`).emit('duel_forfeited', {
+                    duelId: strDuelId,
+                    forfeiterId: String(result.forfeiterId),
+                    opponentId: String(result.opponentId),
+                    penaltyKevs: result.penaltyKevs,
+                    winnerName: result.winnerName,
+                    reason: 'voluntary_forfeit'
                 });
+                io.to(String(result.forfeiterId)).emit('duel_session_ended', { duelId: strDuelId });
+                io.to(String(result.opponentId)).emit('duel_session_ended', { duelId: strDuelId });
                 roomPresences.delete(strDuelId);
             }
         } catch (error) {
             console.error('[SOCKET_DUEL] Erreur forfeit:', error.message);
+        }
+    });
+
+    // GESTION RÉSEAU : Déconnexion inopinée (Coupure réseau, batterie, fermeture forcée)
+    socket.on('disconnect', async () => {
+        if (socketDuelMap.has(socket.id)) {
+            const { duelId, userId } = socketDuelMap.get(socket.id);
+            socketDuelMap.delete(socket.id);
+
+            try {
+                const duel = await DuelSession.findById(duelId).lean();
+                if (duel && (duel.status === 'in_progress' || duel.status === 'ready')) {
+                    const roomName = `duel_${duelId}`;
+                    io.to(roomName).emit('duel_player_disconnected', {
+                        userId,
+                        graceSeconds: 15
+                    });
+                    console.log(`[SOCKET_DUEL] Joueur ${userId} déconnecté du duel ${duelId}. Délai de grâce : 15s`);
+
+                    const disconnectKey = `${duelId}_${userId}`;
+                    const timer = setTimeout(async () => {
+                        try {
+                            const result = await duelService.forfeitDuel(userId, duelId);
+                            if (result) {
+                                io.to(roomName).emit('duel_forfeited', {
+                                    duelId,
+                                    forfeiterId: String(result.forfeiterId),
+                                    opponentId: String(result.opponentId),
+                                    penaltyKevs: result.penaltyKevs,
+                                    winnerName: result.winnerName,
+                                    reason: 'disconnection_timeout'
+                                });
+                                io.to(String(result.opponentId)).emit('duel_session_ended', { duelId });
+                                roomPresences.delete(duelId);
+                                console.log(`[SOCKET_DUEL] Duel ${duelId} clôturé par forfait après 15s de déconnexion`);
+                            }
+                        } catch (timeoutErr) {
+                            console.warn('[SOCKET_DUEL] Erreur clôture déconnexion:', timeoutErr.message);
+                        } finally {
+                            disconnectTimers.delete(disconnectKey);
+                        }
+                    }, 15000);
+
+                    disconnectTimers.set(disconnectKey, timer);
+                }
+            } catch (discErr) {
+                console.error('[SOCKET_DUEL] Erreur gestion disconnect:', discErr.message);
+            }
         }
     });
 };
