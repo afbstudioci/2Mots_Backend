@@ -6,7 +6,7 @@ const User = require('../models/User');
 const Notification = require('../models/Notification');
 const admin = require('../config/firebase');
 
-const PUSH_CHANNEL_ID = 'twomots_alerts_v3';
+const PUSH_CHANNEL_ID = 'twomots_channel_v4_urgent';
 let ioInstance = null;
 
 exports.setIo = (io) => {
@@ -32,10 +32,9 @@ const sanitizeDataPayload = (rawData = {}) => {
     return out;
 };
 
-// Construction du payload FCM v1 valide (sans attributs invalides)
-// On utilise 'default' comme channelId car ce canal est TOUJOURS créé
-// automatiquement par Android. 'twomots_alerts_v3' est déclaré en fallback
-// dans le manifest via app.json > defaultChannel.
+// Construction du payload FCM v1 valide
+// Canal haute priorité : 'twomots_channel_v4_urgent'
+// Priorité de transport : 'high' | Priorité d'affichage Android : 'PRIORITY_MAX' | Visibilité : 'PUBLIC'
 const buildFcmMessage = (token, title, body, type, sanitizedData) => ({
     notification: {
         title: String(title),
@@ -53,9 +52,11 @@ const buildFcmMessage = (token, title, body, type, sanitizedData) => ({
             channelId: PUSH_CHANNEL_ID,
             sound: 'default',
             color: '#FF7F50',
-            priority: 'high',
+            priority: 'PRIORITY_MAX',
+            visibility: 'PUBLIC',
             defaultSound: true,
             defaultVibrateTimings: true,
+            notificationCount: 1,
         },
     },
     apns: {

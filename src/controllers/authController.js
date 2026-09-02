@@ -69,7 +69,7 @@ exports.refreshToken = async (req, res) => {
     try {
         const { refreshToken: currentRefreshToken } = req.body;
         if (!currentRefreshToken) {
-            return res.status(401).json({ status: 'fail', message: 'Aucun jeton de rafrachissement fourni.' });
+            return res.status(401).json({ status: 'fail', message: 'Aucun jeton de rafraîchissement fourni.' });
         }
         const result = await authService.refreshUserToken(currentRefreshToken);
         return res.status(200).json({
@@ -87,9 +87,9 @@ exports.refreshToken = async (req, res) => {
 exports.logout = async (req, res) => {
     try {
         await authService.logoutUser(req.user.id);
-        return res.status(200).json({ status: 'success', message: 'Dconnexion russie.' });
+        return res.status(200).json({ status: 'success', message: 'Déconnexion réussie.' });
     } catch (error) {
-        return res.status(500).json({ status: 'error', message: 'Erreur lors de la dconnexion.' });
+        return res.status(500).json({ status: 'error', message: 'Erreur lors de la déconnexion.' });
     }
 };
 
@@ -134,7 +134,7 @@ exports.updateProfile = async (req, res) => {
             avatarUrl
         });
 
-        return res.status(200).json({ status: 'success', message: 'Profil mis  jour avec succs.', data: { user: updatedUser } });
+        return res.status(200).json({ status: 'success', message: 'Profil mis à jour avec succès.', data: { user: updatedUser } });
     } catch (error) {
         return res.status(400).json({ status: 'fail', message: error.message });
     }
@@ -145,11 +145,11 @@ exports.forgotPassword = async (req, res) => {
         const { email } = req.body;
         const resetToken = await authService.requestPasswordReset(email);
         if (!resetToken) {
-            return res.status(200).json({ status: 'success', message: 'Si cette adresse e-mail existe, un lien a t envoy.' });
+            return res.status(200).json({ status: 'success', message: 'Si cette adresse e-mail existe, un lien a été envoyé.' });
         }
-        return res.status(200).json({ status: 'success', message: 'Jeton de rinitialisation gnr.', data: { resetToken } });
+        return res.status(200).json({ status: 'success', message: 'Jeton de réinitialisation généré.', data: { resetToken } });
     } catch (error) {
-        return res.status(500).json({ status: 'error', message: 'Erreur lors de la demande de rinitialisation.' });
+        return res.status(500).json({ status: 'error', message: 'Erreur lors de la demande de réinitialisation.' });
     }
 };
 
