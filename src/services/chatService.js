@@ -1,4 +1,4 @@
-﻿//src/services/chatService.js
+//src/services/chatService.js
 const mongoose = require('mongoose');
 const Message = require('../models/Message');
 const Friendship = require('../models/Friendship');
@@ -236,8 +236,8 @@ exports.getConversationList = async (userId) => {
 /**
  * Envoie une notification push pour un nouveau message
  */
-exports.sendPushNotification = async (recipientId, senderName, messageText, type) => {
-    await pushService.onNewMessage(recipientId, senderName, messageText, type);
+exports.sendPushNotification = async (recipientId, senderName, messageText, type, senderId = null) => {
+    await pushService.onNewMessage(recipientId, senderName, messageText, type, senderId);
 };
 
 /**

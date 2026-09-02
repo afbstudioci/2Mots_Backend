@@ -50,9 +50,12 @@ const buildFcmMessage = (token, title, body, type, sanitizedData) => ({
     android: {
         priority: 'high',
         notification: {
-            channelId: 'default',
+            channelId: PUSH_CHANNEL_ID,
             sound: 'default',
             color: '#FF7F50',
+            priority: 'high',
+            defaultSound: true,
+            defaultVibrateTimings: true,
         },
     },
     apns: {
@@ -185,16 +188,20 @@ exports.onDuelRejected = async (challengerId, opponentName, opponentId = null) =
 exports.onNewMessage = async (recipientId, senderName, messageText, type, senderId = null) => {
     const bodyMap = {
         text: messageText,
-        image: 'a envoye une photo',
-        video: 'a envoye une video',
-        audio: 'a envoye un message vocal',
+        image: 'a envoyé une photo',
+        video: 'a envoyé une vidéo',
+        audio: 'a envoyé un message vocal',
     };
     await exports.sendNotification(
         recipientId,
         senderName,
-        bodyMap[type] || messageText,
+        bodyMap[type] || messageText || 'Nouveau message',
         'chat_message',
-        { senderName },
+        {
+            senderName,
+            friendId: senderId ? String(senderId) : '',
+            friendName: senderName,
+        },
         senderId
     );
 };
@@ -205,7 +212,7 @@ exports.onFriendRequestSent = async (recipientId, senderName, senderId = null) =
         "Nouvelle demande d'ami",
         `${senderName} souhaite devenir votre ami !`,
         'friend_request',
-        { senderName },
+        { senderName, senderId: senderId ? String(senderId) : '' },
         senderId
     );
 };
@@ -213,10 +220,10 @@ exports.onFriendRequestSent = async (recipientId, senderName, senderId = null) =
 exports.onFriendRequestAccepted = async (requesterId, accepterName, accepterId = null) => {
     await exports.sendNotification(
         requesterId,
-        'Demande acceptee !',
-        `${accepterName} et vous etes maintenant amis !`,
+        'Demande acceptée !',
+        `${accepterName} et vous êtes maintenant amis !`,
         'friend_accepted',
-        { accepterName },
+        { accepterName, accepterId: accepterId ? String(accepterId) : '' },
         accepterId
     );
 };

@@ -49,7 +49,7 @@ io.on('connection', (socket) => {
 
             const settings = await chatService.getChatSettings(recipientId, senderId);
             if (!settings.muteNotifications) {
-                chatService.sendPushNotification(recipientId, senderName, text, type || 'text');
+                chatService.sendPushNotification(recipientId, senderName, text, type || 'text', senderId);
             }
         } catch (error) {
             console.error("[SOCKET] Erreur envoi message:", error.message);

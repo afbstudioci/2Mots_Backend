@@ -1,6 +1,7 @@
-﻿//src/services/friendService.js
+//src/services/friendService.js
 const Friendship = require('../models/Friendship');
 const User = require('../models/User');
+const notificationService = require('./notificationService');
 
 const getFriendList = async (userId) => {
     const friendships = await Friendship.find({
@@ -45,11 +46,23 @@ const sendFriendRequest = async (userId, targetId) => {
         if (existing.status === 'blocked') throw new Error('Action impossible');
     }
 
-    return await Friendship.create({
+    const friendship = await Friendship.create({
         users: [userId, targetId],
         requester: userId,
         status: 'pending'
     });
+
+    // Envoi de la notification push en arrière-plan
+    try {
+        const sender = await User.findById(userId).select('login').lean();
+        if (sender) {
+            notificationService.onFriendRequestSent(targetId, sender.login, userId).catch(() => {});
+        }
+    } catch (e) {
+        console.warn('[FRIEND] Erreur push demande ami:', e.message);
+    }
+
+    return friendship;
 };
 
 const acceptFriendRequest = async (userId, requestId) => {
@@ -59,7 +72,19 @@ const acceptFriendRequest = async (userId, requestId) => {
     if (friendship.requester.toString() === userId.toString()) throw new Error('Vous ne pouvez pas accepter votre propre demande');
 
     friendship.status = 'accepted';
-    return await friendship.save();
+    const saved = await friendship.save();
+
+    // Envoi de la notification push au demandeur
+    try {
+        const accepter = await User.findById(userId).select('login').lean();
+        if (accepter) {
+            notificationService.onFriendRequestAccepted(friendship.requester, accepter.login, userId).catch(() => {});
+        }
+    } catch (e) {
+        console.warn('[FRIEND] Erreur push acceptation ami:', e.message);
+    }
+
+    return saved;
 };
 
 const rejectFriendRequest = async (userId, requestId) => {
