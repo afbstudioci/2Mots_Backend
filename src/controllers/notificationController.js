@@ -98,27 +98,3 @@ exports.deleteNotification = async (req, res, next) => {
         next(error);
     }
 };
-
-/**
- * Envoie une notification push de test a l'utilisateur connecte
- */
-exports.testPush = async (req, res, next) => {
-    try {
-        const userId = req.user.id || req.user._id;
-        const notificationService = require('../services/notificationService');
-        const notif = await notificationService.sendNotification(
-            userId,
-            'Test Push 2Mots',
-            'Félicitations ! Vos notifications push fonctionnent parfaitement.',
-            'general',
-            { test: 'true' }
-        );
-        return res.status(200).json({
-            status: 'success',
-            message: 'Notification de test envoyée avec succès.',
-            data: notif
-        });
-    } catch (error) {
-        next(error);
-    }
-};

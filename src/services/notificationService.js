@@ -1,24 +1,24 @@
 // src/services/notificationService.js
-// MOTEUR DE NOTIFICATIONS HYBRIDE (DB + FCM v1 DIRECT + SOCKET.IO)
-// Architecture : FCM direct via Firebase Admin SDK (sans relay Expo)
+// SERVICE DE GESTION DES NOTIFICATIONS PUSH & TEMPS REEL - 2MOTS
+// Standard de developpement : Clean Architecture / Bank Grade (Strict <= 325 lignes, Sans Emojis)
 
+const admin = require('../config/firebase');
 const User = require('../models/User');
 const Notification = require('../models/Notification');
-const admin = require('../config/firebase');
 
-const PUSH_CHANNEL_ID = 'twomots_channel_v4_urgent';
+const PUSH_CHANNEL_ID = 'default';
 let ioInstance = null;
 
 exports.setIo = (io) => {
     ioInstance = io;
 };
 
-// Verification que Firebase est actif, avec log clair
+// Verification que Firebase est actif
 const isFcmReady = () => {
     const ready = admin.apps && admin.apps.length > 0;
     if (!ready) {
         console.error('[PUSH] CRITIQUE : Firebase Admin non initialise ! Les push FCM seront impossibles.');
-        console.error('[PUSH] Verifiez FIREBASE_SERVICE_ACCOUNT ou les 3 variables individuelles sur Render.');
+        console.error('[PUSH] Verifiez FIREBASE_SERVICE_ACCOUNT ou les variables individuelles sur Render.');
     }
     return ready;
 };
@@ -32,19 +32,11 @@ const sanitizeDataPayload = (rawData = {}) => {
     return out;
 };
 
-// Construction du payload FCM v1 valide
-// Canal haute priorité : 'twomots_channel_v4_urgent'
-// Priorité de transport : 'high' | Priorité d'affichage Android : 'PRIORITY_MAX' | Visibilité : 'PUBLIC'
-const buildFcmMessage = (token, title, body, type, sanitizedData) => ({
+// Construction du payload FCM v1 au format standard Yély (100% compatible Android/iOS)
+const buildFcmMessage = (token, title, body, type, sanitizedData, notificationId = null) => ({
     notification: {
         title: String(title),
         body: String(body),
-    },
-    data: {
-        title: String(title),
-        body: String(body),
-        type: String(type),
-        ...sanitizedData,
     },
     android: {
         priority: 'high',
@@ -52,11 +44,6 @@ const buildFcmMessage = (token, title, body, type, sanitizedData) => ({
             channelId: PUSH_CHANNEL_ID,
             sound: 'default',
             color: '#FF7F50',
-            priority: 'PRIORITY_MAX',
-            visibility: 'PUBLIC',
-            defaultSound: true,
-            defaultVibrateTimings: true,
-            notificationCount: 1,
         },
     },
     apns: {
@@ -68,13 +55,21 @@ const buildFcmMessage = (token, title, body, type, sanitizedData) => ({
             },
         },
     },
+    data: {
+        ...sanitizedData,
+        title: String(title),
+        body: String(body),
+        type: String(type),
+        notificationId: notificationId ? String(notificationId) : '',
+        click_action: 'FLUTTER_NOTIFICATION_CLICK',
+    },
     token,
 });
 
 exports.sendNotification = async (recipientId, title, body, type = 'general', rawData = {}, senderId = null) => {
     let savedNotification = null;
 
-    // 1. Persistance DB (non bloquant)
+    // 1. Persistance DB
     try {
         savedNotification = await Notification.create({
             recipient: recipientId,
@@ -88,7 +83,7 @@ exports.sendNotification = async (recipientId, title, body, type = 'general', ra
         console.warn('[NOTIF_DB] Erreur persistance:', dbErr.message);
     }
 
-    // 2. Diffusion Temps Reel Socket.io (si connecte)
+    // 2. Diffusion Temps Reel Socket.io
     try {
         if (ioInstance) {
             ioInstance.to(String(recipientId)).emit('notification_received', savedNotification || {
@@ -104,7 +99,7 @@ exports.sendNotification = async (recipientId, title, body, type = 'general', ra
         console.warn('[NOTIF_SOCKET] Erreur emission:', sockErr.message);
     }
 
-    // 3. Push Mobile FCM v1 Direct (Firebase Admin SDK uniquement)
+    // 3. Push Mobile FCM v1 Direct
     try {
         const user = await User.findById(recipientId).select('+fcmToken login').lean();
 
@@ -115,16 +110,13 @@ exports.sendNotification = async (recipientId, title, body, type = 'general', ra
 
         if (!user.fcmToken) {
             console.warn(`[PUSH] Utilisateur "${user.login}" (${recipientId}) : fcmToken absent en base. Push impossible.`);
-            console.warn('[PUSH] Verifiez que le client appelle POST /api/auth/fcm-token apres login.');
             return savedNotification;
         }
 
         const token = String(user.fcmToken).trim();
 
-        // GUARD : token au format Expo ? C'est une erreur de configuration frontend
         if (token.startsWith('ExponentPushToken') || token.startsWith('ExpoPushToken')) {
-            console.error(`[PUSH] ERREUR CONFIGURATION : L'utilisateur "${user.login}" a enregistre un token Expo (${token.substring(0, 40)}...).`);
-            console.error('[PUSH] Le frontend doit appeler Notifications.getDevicePushTokenAsync() et NON getExpoPushTokenAsync().');
+            console.error(`[PUSH] ERREUR CONFIGURATION : Token Expo detecte au lieu d'un token FCM natif.`);
             return savedNotification;
         }
 
@@ -133,7 +125,7 @@ exports.sendNotification = async (recipientId, title, body, type = 'general', ra
         }
 
         const sanitizedData = sanitizeDataPayload(rawData);
-        const message = buildFcmMessage(token, title, body, type, sanitizedData);
+        const message = buildFcmMessage(token, title, body, type, sanitizedData, savedNotification?._id);
 
         console.log(`[PUSH] Envoi FCM v1 a "${user.login}" (canal: ${PUSH_CHANNEL_ID})`);
         const fcmResponse = await admin.messaging().send(message);
@@ -141,7 +133,7 @@ exports.sendNotification = async (recipientId, title, body, type = 'general', ra
 
     } catch (error) {
         if (error.code === 'messaging/registration-token-not-registered') {
-            console.warn(`[PUSH] Token expire/invalide pour ${recipientId} — nettoyage en base.`);
+            console.warn(`[PUSH] Token expire/invalide pour ${recipientId} - nettoyage en base.`);
             await User.findByIdAndUpdate(recipientId, { $unset: { fcmToken: 1 } });
         } else {
             console.error(`[PUSH] Echec envoi push pour ${recipientId}: [${error.code || 'UNKNOWN'}] ${error.message}`);
@@ -189,9 +181,9 @@ exports.onDuelRejected = async (challengerId, opponentName, opponentId = null) =
 exports.onNewMessage = async (recipientId, senderName, messageText, type, senderId = null) => {
     const bodyMap = {
         text: messageText,
-        image: 'a envoyé une photo',
-        video: 'a envoyé une vidéo',
-        audio: 'a envoyé un message vocal',
+        image: 'a envoye une photo',
+        video: 'a envoye une video',
+        audio: 'a envoye un message vocal',
     };
     await exports.sendNotification(
         recipientId,
@@ -221,8 +213,8 @@ exports.onFriendRequestSent = async (recipientId, senderName, senderId = null) =
 exports.onFriendRequestAccepted = async (requesterId, accepterName, accepterId = null) => {
     await exports.sendNotification(
         requesterId,
-        'Demande acceptée !',
-        `${accepterName} et vous êtes maintenant amis !`,
+        'Demande acceptee !',
+        `${accepterName} et vous etes maintenant amis !`,
         'friend_accepted',
         { accepterName, accepterId: accepterId ? String(accepterId) : '' },
         accepterId
