@@ -5,6 +5,7 @@ const Friendship = require('../models/Friendship');
 const vaultService = require('./vaultService');
 const notificationService = require('./notificationService');
 const duelEngine = require('./duelEngine');
+const presenceService = require('./presenceService');
 
 const shuffleArray = (array) => {
     const arr = [...array];
@@ -35,10 +36,13 @@ exports.getEligibleOpponents = async (userId) => {
         .limit(50)
         .lean();
 
-    return eligibleUsers.map(user => ({
-        ...user,
-        isFriend: friendIds.some(fid => String(fid) === String(user._id))
-    }));
+    return eligibleUsers
+        .map(user => ({
+            ...user,
+            isFriend: friendIds.some(fid => String(fid) === String(user._id)),
+            isOnline: presenceService.isUserOnline(user._id)
+        }))
+        .sort((a, b) => (b.isOnline - a.isOnline) || (b.isFriend - a.isFriend) || (b.level - a.level));
 };
 
 exports.createDuelInvite = async (challengerId, opponentId, betAmount) => {

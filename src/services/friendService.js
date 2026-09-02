@@ -1,18 +1,25 @@
-//src/services/friendService.js
 const Friendship = require('../models/Friendship');
 const User = require('../models/User');
 const notificationService = require('./notificationService');
+const presenceService = require('./presenceService');
 
 const getFriendList = async (userId) => {
     const friendships = await Friendship.find({
         users: userId,
         status: 'accepted'
-    }).populate('users', 'login avatar level isOnline lastActive');
+    }).populate('users', 'login avatar level lastActive').lean();
 
-    return friendships.map(f => {
-        const friend = f.users.find(u => u._id.toString() !== userId.toString());
-        return friend;
-    }).filter(Boolean);
+    return friendships
+        .map(f => {
+            const friend = f.users.find(u => u._id.toString() !== userId.toString());
+            if (!friend) return null;
+            return {
+                ...friend,
+                isOnline: presenceService.isUserOnline(friend._id)
+            };
+        })
+        .filter(Boolean)
+        .sort((a, b) => (b.isOnline - a.isOnline) || (b.level - a.level));
 };
 
 const getPendingRequests = async (userId) => {

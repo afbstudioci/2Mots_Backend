@@ -18,14 +18,25 @@ const io = new Server(server, {
 const notificationService = require('./services/notificationService');
 notificationService.setIo(io);
 
+const presenceService = require('./services/presenceService');
+presenceService.setIo(io);
+
 app.set('io', io);
 
 io.on('connection', (socket) => {
     console.log(`[SOCKET] Nouvel utilisateur connecté: ${socket.id}`);
 
     socket.on('join', (userId) => {
-        socket.join(userId);
-        console.log(`[SOCKET] Utilisateur ${userId} a rejoint sa room privée`);
+        if (!userId) return;
+        socket.join(String(userId));
+        presenceService.addUserSocket(userId, socket.id);
+        console.log(`[SOCKET] Utilisateur ${userId} a rejoint sa room privée et est EN LIGNE`);
+    });
+
+    socket.on('get_online_users', (callback) => {
+        if (typeof callback === 'function') {
+            callback(presenceService.getOnlineUserIds());
+        }
     });
 
     socket.on('typing_start', ({ recipientId, senderId }) => {
@@ -100,6 +111,7 @@ io.on('connection', (socket) => {
     });
 
     socket.on('disconnect', () => {
+        presenceService.removeUserSocket(socket.id);
         console.log(`[SOCKET] Utilisateur déconnecté: ${socket.id}`);
     });
 
