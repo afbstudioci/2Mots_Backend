@@ -58,12 +58,18 @@ exports.registerUser = async (login, email, password, referredByCode = null) => 
         throw new Error('Le mot de passe doit contenir au moins 8 caractères.');
     }
 
+    const escaped = normalizedLogin.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
     const existingUser = await User.findOne({
-        $or: [{ email: normalizedEmail }, { login: normalizedLogin }]
-    });
+        $or: [
+            { email: normalizedEmail },
+            { login: { $regex: new RegExp(`^${escaped}$`, 'i') } }
+        ]
+    }).lean();
 
     if (existingUser) {
-        if (existingUser.email === normalizedEmail) throw new Error('Cet email est déjà utilisé.');
+        if (existingUser.email && existingUser.email.toLowerCase() === normalizedEmail) {
+            throw new Error('Cette adresse email est déjà utilisée.');
+        }
         throw new Error('Ce pseudo est déjà pris.');
     }
 
@@ -71,7 +77,7 @@ exports.registerUser = async (login, email, password, referredByCode = null) => 
     if (referredByCode && typeof referredByCode === 'string' && referredByCode.trim().length > 0) {
         referredByUser = await User.findOne({ referralCode: referredByCode.trim().toUpperCase() });
         if (!referredByUser) {
-            throw new Error('Code de parrainage invalide');
+            throw new Error('Code de parrainage invalide.');
         }
     }
 
@@ -85,14 +91,20 @@ exports.registerUser = async (login, email, password, referredByCode = null) => 
     // 100 Kevs offerts par défaut à l'inscription + 200 Kevs bonus si parrainé
     const initialKevs = referredByUser ? 300 : 100;
 
+    const mongoose = require('mongoose');
+    const newUserId = new mongoose.Types.ObjectId();
+    const { accessToken, refreshToken } = generateTokens(newUserId);
+
     const newUser = await User.create({
+        _id: newUserId,
         login: normalizedLogin,
         email: normalizedEmail,
         password,
         avatar: defaultAvatar,
         role: assignedRole,
         kevs: initialKevs,
-        referredBy: referredByUser ? referredByUser._id : null
+        referredBy: referredByUser ? referredByUser._id : null,
+        refreshTokens: [refreshToken]
     });
 
     if (referredByUser) {
@@ -100,13 +112,12 @@ exports.registerUser = async (login, email, password, referredByCode = null) => 
         await referredByUser.save();
     }
 
-    const { accessToken, refreshToken } = generateTokens(newUser._id);
-    
-    newUser.refreshTokens.push(refreshToken);
-    await newUser.save({ validateBeforeSave: false });
-
     const userResponse = newUser.toObject();
-    userResponse.rank = await calculateUserRank(newUser);
+    try {
+        userResponse.rank = await calculateUserRank(newUser);
+    } catch {
+        userResponse.rank = null;
+    }
     delete userResponse.password;
     delete userResponse.refreshTokens;
 

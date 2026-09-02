@@ -74,7 +74,10 @@ const userSchema = new mongoose.Schema({
     },
     resetPasswordToken: String,
     resetPasswordExpires: Date,
-    refreshTokens: [{ type: String }],
+    refreshTokens: {
+        type: [String],
+        default: []
+    },
     referralCode: {
         type: String,
         unique: true,
