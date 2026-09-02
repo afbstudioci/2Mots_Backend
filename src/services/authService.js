@@ -114,14 +114,34 @@ exports.registerUser = async (login, email, password, referredByCode = null) => 
 };
 
 exports.loginUser = async (identifier, password) => {
+    if (!identifier || !password) {
+        throw new Error('Identifiant et mot de passe requis');
+    }
+
     const normalizedIdentifier = identifier.trim();
     const isEmail = normalizedIdentifier.includes('@');
 
-    const query = isEmail ? { email: normalizedIdentifier.toLowerCase() } : { login: normalizedIdentifier };
+    let query;
+    if (isEmail) {
+        query = { email: normalizedIdentifier.toLowerCase() };
+    } else {
+        const escaped = normalizedIdentifier.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+        query = {
+            $or: [
+                { login: { $regex: new RegExp(`^${escaped}$`, 'i') } },
+                { email: normalizedIdentifier.toLowerCase() }
+            ]
+        };
+    }
+
     const user = await User.findOne(query).select('+password');
 
     if (!user) {
         throw new Error('Identifiants invalides');
+    }
+
+    if (user.isBanned) {
+        throw new Error(user.banReason ? `Compte suspendu : ${user.banReason}` : 'Votre compte a été suspendu.');
     }
 
     const isMatch = await bcrypt.compare(password, user.password);
@@ -131,11 +151,21 @@ exports.loginUser = async (identifier, password) => {
 
     const { accessToken, refreshToken } = generateTokens(user._id);
 
+    if (!Array.isArray(user.refreshTokens)) {
+        user.refreshTokens = [];
+    }
     user.refreshTokens.push(refreshToken);
+    if (user.refreshTokens.length > 20) {
+        user.refreshTokens = user.refreshTokens.slice(-20);
+    }
     await user.save({ validateBeforeSave: false });
 
     const userResponse = user.toObject();
-    userResponse.rank = await calculateUserRank(user);
+    try {
+        userResponse.rank = await calculateUserRank(user);
+    } catch {
+        userResponse.rank = null;
+    }
     delete userResponse.password;
     delete userResponse.refreshTokens;
 
