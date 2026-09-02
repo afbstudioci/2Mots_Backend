@@ -58,18 +58,12 @@ exports.registerUser = async (login, email, password, referredByCode = null) => 
         throw new Error('Le mot de passe doit contenir au moins 8 caractères.');
     }
 
-    const escaped = normalizedLogin.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
     const existingUser = await User.findOne({
-        $or: [
-            { email: normalizedEmail },
-            { login: { $regex: new RegExp(`^${escaped}$`, 'i') } }
-        ]
-    }).lean();
+        $or: [{ email: normalizedEmail }, { login: normalizedLogin }]
+    });
 
     if (existingUser) {
-        if (existingUser.email && existingUser.email.toLowerCase() === normalizedEmail) {
-            throw new Error('Cette adresse email est déjà utilisée.');
-        }
+        if (existingUser.email === normalizedEmail) throw new Error('Cet email est déjà utilisé.');
         throw new Error('Ce pseudo est déjà pris.');
     }
 
@@ -77,7 +71,7 @@ exports.registerUser = async (login, email, password, referredByCode = null) => 
     if (referredByCode && typeof referredByCode === 'string' && referredByCode.trim().length > 0) {
         referredByUser = await User.findOne({ referralCode: referredByCode.trim().toUpperCase() });
         if (!referredByUser) {
-            throw new Error('Code de parrainage invalide.');
+            throw new Error('Code de parrainage invalide');
         }
     }
 
@@ -91,20 +85,14 @@ exports.registerUser = async (login, email, password, referredByCode = null) => 
     // 100 Kevs offerts par défaut à l'inscription + 200 Kevs bonus si parrainé
     const initialKevs = referredByUser ? 300 : 100;
 
-    const mongoose = require('mongoose');
-    const newUserId = new mongoose.Types.ObjectId();
-    const { accessToken, refreshToken } = generateTokens(newUserId);
-
     const newUser = await User.create({
-        _id: newUserId,
         login: normalizedLogin,
         email: normalizedEmail,
         password,
         avatar: defaultAvatar,
         role: assignedRole,
         kevs: initialKevs,
-        referredBy: referredByUser ? referredByUser._id : null,
-        refreshTokens: [refreshToken]
+        referredBy: referredByUser ? referredByUser._id : null
     });
 
     if (referredByUser) {
@@ -112,12 +100,13 @@ exports.registerUser = async (login, email, password, referredByCode = null) => 
         await referredByUser.save();
     }
 
+    const { accessToken, refreshToken } = generateTokens(newUser._id);
+    
+    newUser.refreshTokens.push(refreshToken);
+    await newUser.save({ validateBeforeSave: false });
+
     const userResponse = newUser.toObject();
-    try {
-        userResponse.rank = await calculateUserRank(newUser);
-    } catch {
-        userResponse.rank = null;
-    }
+    userResponse.rank = await calculateUserRank(newUser);
     delete userResponse.password;
     delete userResponse.refreshTokens;
 
@@ -125,34 +114,14 @@ exports.registerUser = async (login, email, password, referredByCode = null) => 
 };
 
 exports.loginUser = async (identifier, password) => {
-    if (!identifier || !password) {
-        throw new Error('Identifiant et mot de passe requis');
-    }
-
     const normalizedIdentifier = identifier.trim();
     const isEmail = normalizedIdentifier.includes('@');
 
-    let query;
-    if (isEmail) {
-        query = { email: normalizedIdentifier.toLowerCase() };
-    } else {
-        const escaped = normalizedIdentifier.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-        query = {
-            $or: [
-                { login: { $regex: new RegExp(`^${escaped}$`, 'i') } },
-                { email: normalizedIdentifier.toLowerCase() }
-            ]
-        };
-    }
-
+    const query = isEmail ? { email: normalizedIdentifier.toLowerCase() } : { login: normalizedIdentifier };
     const user = await User.findOne(query).select('+password');
 
     if (!user) {
         throw new Error('Identifiants invalides');
-    }
-
-    if (user.isBanned) {
-        throw new Error(user.banReason ? `Compte suspendu : ${user.banReason}` : 'Votre compte a été suspendu.');
     }
 
     const isMatch = await bcrypt.compare(password, user.password);
@@ -162,21 +131,11 @@ exports.loginUser = async (identifier, password) => {
 
     const { accessToken, refreshToken } = generateTokens(user._id);
 
-    if (!Array.isArray(user.refreshTokens)) {
-        user.refreshTokens = [];
-    }
     user.refreshTokens.push(refreshToken);
-    if (user.refreshTokens.length > 20) {
-        user.refreshTokens = user.refreshTokens.slice(-20);
-    }
     await user.save({ validateBeforeSave: false });
 
     const userResponse = user.toObject();
-    try {
-        userResponse.rank = await calculateUserRank(user);
-    } catch {
-        userResponse.rank = null;
-    }
+    userResponse.rank = await calculateUserRank(user);
     delete userResponse.password;
     delete userResponse.refreshTokens;
 

@@ -22,10 +22,6 @@ const getErrorMessage = (error) => {
     if (error?.errors && Array.isArray(error.errors) && error.errors.length > 0) {
         return error.errors[0].message || error.errors[0];
     }
-    if (error?.code === 11000) {
-        const field = Object.keys(error.keyValue || {})[0];
-        return field === 'email' ? 'Cette adresse email est déjà utilisée.' : 'Ce pseudo est déjà pris.';
-    }
     return error?.message || 'Données invalides fournies.';
 };
 
