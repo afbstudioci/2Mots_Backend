@@ -8,8 +8,9 @@ const upload = require('../middlewares/uploadMiddleware');
 
 const authLimiter = rateLimit({
     windowMs: 15 * 60 * 1000,
-    max: 10,
-    message: { status: 'error', message: 'Trop de tentatives. Veuillez réessayer dans 15 minutes.' }
+    max: 30,
+    skipSuccessfulRequests: true,
+    message: { status: 'error', message: 'Trop de tentatives infructueuses. Veuillez réessayer dans 15 minutes.' }
 });
 
 router.post('/register', authLimiter, authController.register);
