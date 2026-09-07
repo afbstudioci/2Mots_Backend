@@ -94,10 +94,30 @@ exports.respondInvite = async (req, res, next) => {
         const { duelId, accept } = parsed.data;
         const result = await duelService.respondToDuelInvite(req.user._id, duelId, accept);
 
+        if (result?.status === 'challenger_offline') {
+            return res.status(200).json({
+                status: 'challenger_offline',
+                message: result.message,
+                data: result
+            });
+        }
+
         const io = req.app.get('io');
         if (io && result) {
             const challengerId = result.challenger?._id || result.challenger;
             if (challengerId) {
+                if (accept) {
+                    io.to(String(challengerId)).emit('duel_match_alert', {
+                        duelId: String(result._id || result.duelId || duelId),
+                        opponentId: String(req.user._id),
+                        opponentName: req.user.login,
+                        opponentAvatar: req.user.avatar,
+                        opponentLevel: req.user.level,
+                        betAmount: result.betAmount || 25,
+                        expiresAt: Date.now() + 15000
+                    });
+                }
+
                 io.to(String(challengerId)).emit('duel_invite_response', {
                     duelId: String(result.duelId || result._id || duelId),
                     opponentName: req.user.login,

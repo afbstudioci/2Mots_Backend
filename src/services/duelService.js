@@ -22,15 +22,8 @@ exports.getEligibleOpponents = async (userId) => {
         status: 'accepted'
     }).lean();
 
-    const friendIds = friendships.map(f =>
-        String(f.requester) === String(userId) ? f.recipient : f.requester
-    );
-
-    const eligibleUsers = await User.find({
-        _id: { $ne: userId },
-        level: { $gte: 5 },
-        isBanned: false
-    })
+    const friendIds = friendships.map(f => String(f.requester) === String(userId) ? f.recipient : f.requester);
+    const eligibleUsers = await User.find({ _id: { $ne: userId }, level: { $gte: 5 }, isBanned: false })
         .select('login avatar level bestScore isVip equippedFrame')
         .sort({ level: -1 })
         .limit(50)
@@ -46,50 +39,23 @@ exports.getEligibleOpponents = async (userId) => {
 };
 
 exports.createDuelInvite = async (challengerId, opponentId, betAmount) => {
-    if (String(challengerId) === String(opponentId)) {
-        throw new Error('Vous ne pouvez pas vous défier vous-même.');
-    }
+    if (String(challengerId) === String(opponentId)) throw new Error('Vous ne pouvez pas vous défier vous-même.');
 
-    const [challenger, opponent] = await Promise.all([
-        User.findById(challengerId),
-        User.findById(opponentId)
-    ]);
+    const [challenger, opponent] = await Promise.all([User.findById(challengerId), User.findById(opponentId)]);
+    if (!challenger || challenger.level < 5) throw new Error('Vous devez être au moins au niveau 5 pour défier en duel.');
+    if (!opponent || opponent.level < 5) throw new Error('L\'adversaire ciblé doit être au moins au niveau 5.');
+    if (challenger.kevs < betAmount) throw new Error(`Solde insuffisant : vous avez ${challenger.kevs} Kevs (mise : ${betAmount}).`);
+    if (opponent.kevs < betAmount) throw new Error(`L'adversaire n'a pas assez de Kevs (${opponent.kevs} Kevs) pour cette mise.`);
 
-    if (!challenger || challenger.level < 5) {
-        throw new Error('Vous devez être au moins au niveau 5 pour défier en duel.');
-    }
-    if (!opponent || opponent.level < 5) {
-        throw new Error('L\'adversaire ciblé doit être au moins au niveau 5.');
-    }
-    if (challenger.kevs < betAmount) {
-        throw new Error(`Solde insuffisant : vous avez ${challenger.kevs} Kevs (mise : ${betAmount}).`);
-    }
-    if (opponent.kevs < betAmount) {
-        throw new Error(`L'adversaire n'a pas assez de Kevs (${opponent.kevs} Kevs) pour cette mise.`);
-    }
+    const existingPending = await DuelSession.findOne({ challenger: challengerId, opponent: opponentId, status: 'pending' });
+    if (existingPending) throw new Error('Une invitation est déjà en attente pour cet adversaire.');
 
-    const existingPending = await DuelSession.findOne({
-        challenger: challengerId,
-        opponent: opponentId,
-        status: 'pending'
-    });
-    if (existingPending) {
-        throw new Error('Une invitation est déjà en attente pour cet adversaire.');
-    }
-
-    const duel = await DuelSession.create({
-        challenger: challengerId,
-        opponent: opponentId,
-        betAmount,
-        status: 'pending'
-    });
-
+    const duel = await DuelSession.create({ challenger: challengerId, opponent: opponentId, betAmount, status: 'pending' });
     try {
         await notificationService.onDuelInvite(opponentId, challenger.login, betAmount, duel._id);
     } catch (e) {
         console.warn('[DUEL] Erreur notification push invitation:', e.message);
     }
-
     return duel;
 };
 
@@ -127,6 +93,34 @@ exports.respondToDuelInvite = async (opponentId, duelId, accept) => {
         duel.status = 'cancelled';
         await duel.save();
         throw new Error('Vous n\'avez plus assez de Kevs pour accepter ce duel.');
+    }
+
+    // Verification de presence en direct du challenger
+    const isChallengerOnline = presenceService.isUserOnline(duel.challenger._id);
+    if (!isChallengerOnline) {
+        try {
+            await notificationService.sendNotification(
+                duel.challenger._id,
+                'Défi accepté !',
+                `${duel.opponent.login} a accepté votre défi (${duel.betAmount} Kevs) ! Connectez-vous vite pour lancer le duel !`,
+                'duel_opponent_ready',
+                {
+                    duelId: String(duel._id),
+                    opponentName: duel.opponent.login,
+                    betAmount: String(duel.betAmount)
+                },
+                duel.opponent._id
+            );
+        } catch (e) {
+            console.warn('[DUEL] Erreur notification challenger offline:', e.message);
+        }
+
+        return {
+            status: 'challenger_offline',
+            duelId: duel._id,
+            challengerName: duel.challenger.login,
+            message: `${duel.challenger.login} n'est pas connecté actuellement. Une notification lui a été envoyée.`
+        };
     }
 
     const rawBatch = await vaultService.getEnigmaBatch(5, [], 20);

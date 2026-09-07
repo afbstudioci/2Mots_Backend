@@ -112,6 +112,33 @@ module.exports = (io, socket) => {
         }
     });
 
+    socket.on('duel_alert_response', async ({ duelId, userId, accept }) => {
+        try {
+            const strDuelId = String(duelId);
+            const strUserId = String(userId);
+            const roomName = `duel_${strDuelId}`;
+
+            if (!accept) {
+                if (lobbyTimers.has(strDuelId)) {
+                    clearTimeout(lobbyTimers.get(strDuelId));
+                    lobbyTimers.delete(strDuelId);
+                }
+                try {
+                    await duelService.cancelInactiveDuel(strUserId, strDuelId);
+                } catch (e) {}
+
+                io.to(roomName).emit('duel_lobby_cancelled', {
+                    duelId: strDuelId,
+                    cancelledBy: strUserId,
+                    message: "L'adversaire est actuellement indisponible. Vos Kevs vous ont été restitués."
+                });
+                roomPresences.delete(strDuelId);
+            }
+        } catch (err) {
+            console.error('[SOCKET_DUEL] Erreur alert response:', err.message);
+        }
+    });
+
     socket.on('duel_buzz', async ({ duelId, userId }) => {
         try {
             const strDuelId = String(duelId);
