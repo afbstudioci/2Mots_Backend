@@ -44,6 +44,11 @@ const buildFcmMessage = (token, title, body, type, sanitizedData, notificationId
             channelId: PUSH_CHANNEL_ID,
             sound: 'default',
             color: '#FF7F50',
+            priority: 'max',
+            visibility: 'public',
+            defaultSound: true,
+            defaultVibrateTimings: true,
+            icon: 'notification_icon',
         },
     },
     apns: {
@@ -61,7 +66,6 @@ const buildFcmMessage = (token, title, body, type, sanitizedData, notificationId
         body: String(body),
         type: String(type),
         notificationId: notificationId ? String(notificationId) : '',
-        click_action: 'FLUTTER_NOTIFICATION_CLICK',
     },
     token,
 });

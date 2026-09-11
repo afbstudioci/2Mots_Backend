@@ -1,12 +1,13 @@
 //src/sockets/duelSocket.js
 const duelService = require('../services/duelService');
 const DuelSession = require('../models/DuelSession');
+const notificationService = require('../services/notificationService');
 
 // Mémoire locale de présence, timers de buzzer, déconnexion et lobby
 const roomPresences = new Map(); // duelId -> Set of userIds
 const buzzerTimeouts = new Map(); // duelId -> Timeout
 const disconnectTimers = new Map(); // `${duelId}_${userId}` -> Timeout
-const lobbyTimers = new Map(); // duelId -> Timeout (60s attente adversaire)
+const lobbyTimers = new Map(); // duelId -> { timer, expiresAt }
 const socketDuelMap = new Map(); // socket.id -> { duelId, userId }
 
 module.exports = (io, socket) => {
@@ -48,7 +49,8 @@ module.exports = (io, socket) => {
 
             if (bothReady || duel.status === 'in_progress') {
                 if (lobbyTimers.has(strDuelId)) {
-                    clearTimeout(lobbyTimers.get(strDuelId));
+                    const lobbyEntry = lobbyTimers.get(strDuelId);
+                    if (lobbyEntry?.timer) clearTimeout(lobbyEntry.timer);
                     lobbyTimers.delete(strDuelId);
                 }
                 const updatedDuel = await duelService.startDuelGame(strDuelId);
@@ -60,6 +62,7 @@ module.exports = (io, socket) => {
                 });
             } else {
                 if (!lobbyTimers.has(strDuelId)) {
+                    const expiresAt = Date.now() + 60000;
                     const timer = setTimeout(async () => {
                         lobbyTimers.delete(strDuelId);
                         try {
@@ -67,19 +70,47 @@ module.exports = (io, socket) => {
                         } catch (e) {}
                         io.to(roomName).emit('duel_lobby_timeout', {
                             duelId: strDuelId,
-                            message: "L'adversaire n'a pas rejoint la salle à temps (60s). Le duel est annulé et vos Kevs sont intacts."
+                            message: "L'adversaire n'a pas rejoint la salle à temps. Le duel est annulé et vos Kevs sont intacts."
                         });
                         roomPresences.delete(strDuelId);
                     }, 60000);
-                    lobbyTimers.set(strDuelId, timer);
+                    lobbyTimers.set(strDuelId, { timer, expiresAt });
                 }
+
+                const currentLobby = lobbyTimers.get(strDuelId);
+                const remainingMs = currentLobby ? Math.max(0, currentLobby.expiresAt - Date.now()) : 60000;
+                const waitSeconds = Math.ceil(remainingMs / 1000);
 
                 io.to(roomName).emit('duel_waiting_opponent', {
                     duelId: strDuelId,
                     connectedCount: presenceSet.size,
-                    waitSeconds: 60,
+                    expiresAt: currentLobby?.expiresAt || (Date.now() + 60000),
+                    waitSeconds,
                     duel
                 });
+
+                // Alerte Push + Socket vers le challenger s'il n'est pas encore entré dans l'arène
+                if (strUserId === opponentId && !presenceSet.has(challengerId)) {
+                    const opponentName = duel.opponent?.login || 'Votre adversaire';
+                    io.to(String(challengerId)).emit('duel_match_alert', {
+                        duelId: strDuelId,
+                        opponentId: strUserId,
+                        opponentName,
+                        opponentAvatar: duel.opponent?.avatar,
+                        opponentLevel: duel.opponent?.level,
+                        betAmount: duel.betAmount || 25,
+                        expiresAt: currentLobby?.expiresAt || (Date.now() + 60000)
+                    });
+
+                    notificationService.onDuelAccepted(
+                        challengerId,
+                        opponentName,
+                        strDuelId,
+                        strUserId
+                    ).catch((notifErr) => {
+                        console.warn('[SOCKET_DUEL] Push alert error:', notifErr.message);
+                    });
+                }
             }
         } catch (error) {
             console.error('[SOCKET_DUEL] Erreur join duel:', error.message);
@@ -94,7 +125,8 @@ module.exports = (io, socket) => {
             const roomName = `duel_${strDuelId}`;
 
             if (lobbyTimers.has(strDuelId)) {
-                clearTimeout(lobbyTimers.get(strDuelId));
+                const lobbyEntry = lobbyTimers.get(strDuelId);
+                if (lobbyEntry?.timer) clearTimeout(lobbyEntry.timer);
                 lobbyTimers.delete(strDuelId);
             }
             try {
