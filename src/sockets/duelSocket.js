@@ -1,367 +1,237 @@
-//src/sockets/duelSocket.js
+// src/sockets/duelSocket.js
+// GESTIONNAIRE DES CONNEXIONS ET DU LOBBY TEMPS REEL - 2MOTS
+// Standard : Clean Architecture / Bank Grade (Strict <= 270 lignes, Sans Emojis)
+
 const duelService = require('../services/duelService');
 const DuelSession = require('../models/DuelSession');
 const notificationService = require('../services/notificationService');
-
-// Mémoire locale de présence, timers de buzzer, déconnexion et lobby
-const roomPresences = new Map(); // duelId -> Set of userIds
-const buzzerTimeouts = new Map(); // duelId -> Timeout
-const disconnectTimers = new Map(); // `${duelId}_${userId}` -> Timeout
-const lobbyTimers = new Map(); // duelId -> { timer, expiresAt }
-const socketDuelMap = new Map(); // socket.id -> { duelId, userId }
+const {
+  roomPresences,
+  disconnectTimers,
+  lobbyTimers,
+  socketDuelMap,
+} = require('./duelState');
+const registerGameplayHandlers = require('./duelGameplay');
 
 module.exports = (io, socket) => {
-    socket.on('duel_join', async ({ duelId, userId }) => {
-        try {
-            if (!duelId || !userId) return;
-            const strDuelId = String(duelId);
-            const strUserId = String(userId);
-            const roomName = `duel_${strDuelId}`;
+  // Enregistrement des handlers de gameplay
+  registerGameplayHandlers(io, socket);
 
-            socket.join(roomName);
-            socketDuelMap.set(socket.id, { duelId: strDuelId, userId: strUserId });
+  // 1. Connexion / Entree dans la salle du duel
+  socket.on('duel_join', async ({ duelId, userId }) => {
+    try {
+      if (!duelId || !userId) return;
+      const strDuelId = String(duelId);
+      const strUserId = String(userId);
+      const roomName = `duel_${strDuelId}`;
 
-            // Annulation du timer d'abandon si le joueur s'est reconnecté dans les 15 secondes
-            const disconnectKey = `${strDuelId}_${strUserId}`;
-            if (disconnectTimers.has(disconnectKey)) {
-                clearTimeout(disconnectTimers.get(disconnectKey));
-                disconnectTimers.delete(disconnectKey);
-                io.to(roomName).emit('duel_player_reconnected', { userId: strUserId });
-                console.log(`[SOCKET_DUEL] Joueur ${strUserId} reconnecté à temps au duel ${strDuelId}`);
-            }
+      socket.join(roomName);
+      socketDuelMap.set(socket.id, { duelId: strDuelId, userId: strUserId });
 
-            if (!roomPresences.has(strDuelId)) {
-                roomPresences.set(strDuelId, new Set());
-            }
-            roomPresences.get(strDuelId).add(strUserId);
+      // Annulation du timer de deconnexion si le joueur revient a temps
+      const disconnectKey = `${strDuelId}_${strUserId}`;
+      if (disconnectTimers.has(disconnectKey)) {
+        clearTimeout(disconnectTimers.get(disconnectKey));
+        disconnectTimers.delete(disconnectKey);
+        io.to(roomName).emit('duel_player_reconnected', { userId: strUserId });
+        console.log(`[SOCKET_DUEL] Joueur ${strUserId} reconnecte a temps au duel ${strDuelId}`);
+      }
 
-            const duel = await DuelSession.findById(strDuelId)
-                .populate('challenger opponent winner', 'login avatar level')
-                .lean();
+      if (!roomPresences.has(strDuelId)) {
+        roomPresences.set(strDuelId, new Set());
+      }
+      roomPresences.get(strDuelId).add(strUserId);
 
-            if (!duel) return;
+      const duel = await DuelSession.findById(strDuelId)
+        .populate('challenger opponent winner', 'login avatar level')
+        .lean();
 
-            const challengerId = String(duel.challenger?._id || duel.challenger);
-            const opponentId = String(duel.opponent?._id || duel.opponent);
-            const presenceSet = roomPresences.get(strDuelId);
+      if (!duel) return;
 
-            const bothReady = presenceSet.has(challengerId) && presenceSet.has(opponentId);
+      const challengerId = String(duel.challenger?._id || duel.challenger);
+      const opponentId = String(duel.opponent?._id || duel.opponent);
+      const presenceSet = roomPresences.get(strDuelId);
 
-            if (bothReady || duel.status === 'in_progress') {
-                if (lobbyTimers.has(strDuelId)) {
-                    const lobbyEntry = lobbyTimers.get(strDuelId);
-                    if (lobbyEntry?.timer) clearTimeout(lobbyEntry.timer);
-                    lobbyTimers.delete(strDuelId);
-                }
-                const updatedDuel = await duelService.startDuelGame(strDuelId);
-                io.to(roomName).emit('duel_start', {
-                    duelId: strDuelId,
-                    duel: updatedDuel,
-                    startedAt: updatedDuel.startedAt,
-                    duration: updatedDuel.duration || 60
-                });
-            } else {
-                if (!lobbyTimers.has(strDuelId)) {
-                    const expiresAt = Date.now() + 60000;
-                    const timer = setTimeout(async () => {
-                        lobbyTimers.delete(strDuelId);
-                        try {
-                            await duelService.cancelInactiveDuel(strUserId, strDuelId);
-                        } catch (e) {}
-                        io.to(roomName).emit('duel_lobby_timeout', {
-                            duelId: strDuelId,
-                            message: "L'adversaire n'a pas rejoint la salle à temps. Le duel est annulé et vos Kevs sont intacts."
-                        });
-                        roomPresences.delete(strDuelId);
-                    }, 60000);
-                    lobbyTimers.set(strDuelId, { timer, expiresAt });
-                }
+      const bothReady = presenceSet.has(challengerId) && presenceSet.has(opponentId);
 
-                const currentLobby = lobbyTimers.get(strDuelId);
-                const remainingMs = currentLobby ? Math.max(0, currentLobby.expiresAt - Date.now()) : 60000;
-                const waitSeconds = Math.ceil(remainingMs / 1000);
-
-                io.to(roomName).emit('duel_waiting_opponent', {
-                    duelId: strDuelId,
-                    connectedCount: presenceSet.size,
-                    expiresAt: currentLobby?.expiresAt || (Date.now() + 60000),
-                    waitSeconds,
-                    duel
-                });
-
-                // Alerte Push + Socket vers le challenger s'il n'est pas encore entré dans l'arène
-                if (strUserId === opponentId && !presenceSet.has(challengerId)) {
-                    const opponentName = duel.opponent?.login || 'Votre adversaire';
-                    io.to(String(challengerId)).emit('duel_match_alert', {
-                        duelId: strDuelId,
-                        opponentId: strUserId,
-                        opponentName,
-                        opponentAvatar: duel.opponent?.avatar,
-                        opponentLevel: duel.opponent?.level,
-                        betAmount: duel.betAmount || 25,
-                        expiresAt: currentLobby?.expiresAt || (Date.now() + 60000)
-                    });
-
-                    notificationService.onDuelAccepted(
-                        challengerId,
-                        opponentName,
-                        strDuelId,
-                        strUserId
-                    ).catch((notifErr) => {
-                        console.warn('[SOCKET_DUEL] Push alert error:', notifErr.message);
-                    });
-                }
-            }
-        } catch (error) {
-            console.error('[SOCKET_DUEL] Erreur join duel:', error.message);
-            socket.emit('duel_error', { message: error.message });
+      // Si les deux joueurs sont presents OU si la partie est deja en cours
+      if (bothReady || duel.status === 'in_progress') {
+        if (lobbyTimers.has(strDuelId)) {
+          const lobbyEntry = lobbyTimers.get(strDuelId);
+          if (lobbyEntry?.timer) clearTimeout(lobbyEntry.timer);
+          lobbyTimers.delete(strDuelId);
         }
-    });
 
-    socket.on('duel_cancel_lobby', async ({ duelId, userId }) => {
-        try {
-            const strDuelId = String(duelId);
-            const strUserId = String(userId);
-            const roomName = `duel_${strDuelId}`;
+        const updatedDuel = duel.status === 'in_progress'
+          ? duel
+          : await duelService.startDuelGame(strDuelId);
 
-            if (lobbyTimers.has(strDuelId)) {
-                const lobbyEntry = lobbyTimers.get(strDuelId);
-                if (lobbyEntry?.timer) clearTimeout(lobbyEntry.timer);
-                lobbyTimers.delete(strDuelId);
-            }
+        const payload = {
+          duelId: strDuelId,
+          duel: updatedDuel,
+          startedAt: updatedDuel.startedAt,
+          duration: updatedDuel.duration || 60,
+        };
+
+        io.to(roomName).emit('duel_start', payload);
+        console.log(`[SOCKET_DUEL] Duel ${strDuelId} demarre avec succes.`);
+      } else {
+        // Un seul joueur present : initialisation du timer de lobby (60s)
+        if (!lobbyTimers.has(strDuelId)) {
+          const expiresAt = Date.now() + 60000;
+          const timer = setTimeout(async () => {
+            lobbyTimers.delete(strDuelId);
             try {
-                await duelService.cancelInactiveDuel(strUserId, strDuelId);
+              await duelService.cancelInactiveDuel(strUserId, strDuelId);
             } catch (e) {}
-
-            io.to(roomName).emit('duel_lobby_cancelled', {
-                duelId: strDuelId,
-                cancelledBy: strUserId,
-                message: "Le duel a été annulé. Vos Kevs vous ont été restitués."
+            io.to(roomName).emit('duel_lobby_timeout', {
+              duelId: strDuelId,
+              message: "L'adversaire n'a pas rejoint la salle a temps. Le duel est annule et vos Kevs sont intacts.",
             });
             roomPresences.delete(strDuelId);
-        } catch (err) {
-            console.error('[SOCKET_DUEL] Erreur cancel lobby:', err.message);
+          }, 60000);
+          lobbyTimers.set(strDuelId, { timer, expiresAt });
         }
-    });
 
-    socket.on('duel_alert_response', async ({ duelId, userId, accept }) => {
+        const currentLobby = lobbyTimers.get(strDuelId);
+        const remainingMs = currentLobby ? Math.max(0, currentLobby.expiresAt - Date.now()) : 60000;
+        const waitSeconds = Math.ceil(remainingMs / 1000);
+
+        io.to(roomName).emit('duel_waiting_opponent', {
+          duelId: strDuelId,
+          connectedCount: presenceSet.size,
+          expiresAt: currentLobby?.expiresAt || (Date.now() + 60000),
+          waitSeconds,
+          duel,
+        });
+
+        // Alerte Temps Reel + Push vers le challenger si l'adversaire vient de rejoindre la salle
+        if (strUserId === opponentId && !presenceSet.has(challengerId)) {
+          const opponentName = duel.opponent?.login || 'Votre adversaire';
+          io.to(String(challengerId)).emit('duel_match_alert', {
+            duelId: strDuelId,
+            opponentId: strUserId,
+            opponentName,
+            opponentAvatar: duel.opponent?.avatar,
+            opponentLevel: duel.opponent?.level,
+            betAmount: duel.betAmount || 25,
+            expiresAt: currentLobby?.expiresAt || (Date.now() + 60000),
+          });
+
+          notificationService.onDuelAccepted(
+            challengerId,
+            opponentName,
+            strDuelId,
+            strUserId
+          ).catch((notifErr) => {
+            console.warn('[SOCKET_DUEL] Erreur push alerte challenger:', notifErr.message);
+          });
+        }
+      }
+    } catch (error) {
+      console.error('[SOCKET_DUEL] Erreur join duel:', error.message);
+      socket.emit('duel_error', { message: error.message });
+    }
+  });
+
+  // 2. Annulation manuelle de l'attente en lobby
+  socket.on('duel_cancel_lobby', async ({ duelId, userId }) => {
+    try {
+      const strDuelId = String(duelId);
+      const strUserId = String(userId);
+      const roomName = `duel_${strDuelId}`;
+
+      if (lobbyTimers.has(strDuelId)) {
+        const lobbyEntry = lobbyTimers.get(strDuelId);
+        if (lobbyEntry?.timer) clearTimeout(lobbyEntry.timer);
+        lobbyTimers.delete(strDuelId);
+      }
+      try {
+        await duelService.cancelInactiveDuel(strUserId, strDuelId);
+      } catch (e) {}
+
+      io.to(roomName).emit('duel_lobby_cancelled', {
+        duelId: strDuelId,
+        cancelledBy: strUserId,
+        message: "Le duel a ete annule. Vos Kevs vous ont ete restitues.",
+      });
+      roomPresences.delete(strDuelId);
+    } catch (err) {
+      console.error('[SOCKET_DUEL] Erreur cancel lobby:', err.message);
+    }
+  });
+
+  // 3. Reponse a la modale d'alerte en direct
+  socket.on('duel_alert_response', async ({ duelId, userId, accept }) => {
+    try {
+      const strDuelId = String(duelId);
+      const strUserId = String(userId);
+      const roomName = `duel_${strDuelId}`;
+
+      if (!accept) {
+        if (lobbyTimers.has(strDuelId)) {
+          clearTimeout(lobbyTimers.get(strDuelId));
+          lobbyTimers.delete(strDuelId);
+        }
         try {
-            const strDuelId = String(duelId);
-            const strUserId = String(userId);
-            const roomName = `duel_${strDuelId}`;
+          await duelService.cancelInactiveDuel(strUserId, strDuelId);
+        } catch (e) {}
 
-            if (!accept) {
-                if (lobbyTimers.has(strDuelId)) {
-                    clearTimeout(lobbyTimers.get(strDuelId));
-                    lobbyTimers.delete(strDuelId);
-                }
-                try {
-                    await duelService.cancelInactiveDuel(strUserId, strDuelId);
-                } catch (e) {}
+        io.to(roomName).emit('duel_lobby_cancelled', {
+          duelId: strDuelId,
+          cancelledBy: strUserId,
+          message: "L'adversaire est indisponible. Vos Kevs vous ont ete restitues.",
+        });
+        roomPresences.delete(strDuelId);
+      }
+    } catch (err) {
+      console.error('[SOCKET_DUEL] Erreur alert response:', err.message);
+    }
+  });
 
-                io.to(roomName).emit('duel_lobby_cancelled', {
-                    duelId: strDuelId,
-                    cancelledBy: strUserId,
-                    message: "L'adversaire est actuellement indisponible. Vos Kevs vous ont été restitués."
-                });
-                roomPresences.delete(strDuelId);
-            }
-        } catch (err) {
-            console.error('[SOCKET_DUEL] Erreur alert response:', err.message);
-        }
-    });
+  // 4. Deconnexion inattendue
+  socket.on('disconnect', async () => {
+    if (socketDuelMap.has(socket.id)) {
+      const { duelId, userId } = socketDuelMap.get(socket.id);
+      socketDuelMap.delete(socket.id);
 
-    socket.on('duel_buzz', async ({ duelId, userId }) => {
-        try {
-            const strDuelId = String(duelId);
-            const duel = await duelService.handleBuzzer(strDuelId, userId);
+      try {
+        const duel = await DuelSession.findById(duelId).lean();
+        if (duel && (duel.status === 'in_progress' || duel.status === 'ready')) {
+          const roomName = `duel_${duelId}`;
+          io.to(roomName).emit('duel_player_disconnected', {
+            userId,
+            graceSeconds: 15,
+          });
 
-            if (duel && duel.activeBuzzer?.userId) {
-                const activeUser = duel.activeBuzzer.userId;
-                const activeUserName = activeUser?.login || (String(activeUser) === String(userId) ? 'Joueur' : 'Adversaire');
-
-                if (buzzerTimeouts.has(strDuelId)) {
-                    clearTimeout(buzzerTimeouts.get(strDuelId));
-                }
-
-                io.to(`duel_${strDuelId}`).emit('duel_buzzer_locked', {
-                    userId: String(activeUser._id || activeUser),
-                    userName: activeUserName,
-                    lockedAt: duel.activeBuzzer.lockedAt,
-                    expiresAt: duel.activeBuzzer.expiresAt
-                });
-
-                const timeout = setTimeout(async () => {
-                    await duelService.releaseBuzzer(strDuelId);
-                    io.to(`duel_${strDuelId}`).emit('duel_buzzer_expired', {
-                        duelId: strDuelId,
-                        message: 'Parole libre'
-                    });
-                    buzzerTimeouts.delete(strDuelId);
-                }, 3200);
-
-                buzzerTimeouts.set(strDuelId, timeout);
-            } else {
-                socket.emit('duel_buzz_rejected', { message: 'Buzzer déjà activé ou indisponible.' });
-            }
-        } catch (error) {
-            console.error('[SOCKET_DUEL] Erreur buzz:', error.message);
-            socket.emit('duel_error', { message: error.message });
-        }
-    });
-
-    socket.on('duel_submit_answer', async ({ duelId, userId, answer }) => {
-        try {
-            const strDuelId = String(duelId);
-            if (buzzerTimeouts.has(strDuelId)) {
-                clearTimeout(buzzerTimeouts.get(strDuelId));
-                buzzerTimeouts.delete(strDuelId);
-            }
-
-            const result = await duelService.submitAnswer(strDuelId, userId, answer);
-            if (result) {
-                io.to(`duel_${strDuelId}`).emit('duel_answer_result', {
-                    userId,
-                    answer,
-                    isCorrect: result.isCorrect,
-                    scores: result.scores,
-                    currentEnigmaIndex: result.currentEnigmaIndex,
-                    nextEnigma: result.nextEnigma,
-                    isLastEnigma: result.isLastEnigma
-                });
-
-                if (result.isLastEnigma) {
-                    const finalSummary = await duelService.finishDuel(strDuelId);
-                    io.to(`duel_${strDuelId}`).emit('duel_game_over', {
-                        duel: finalSummary,
-                        reason: 'all_enigmas_completed'
-                    });
-                    roomPresences.delete(strDuelId);
-                }
-            }
-        } catch (error) {
-            console.error('[SOCKET_DUEL] Erreur submit answer:', error.message);
-            socket.emit('duel_error', { message: error.message });
-        }
-    });
-
-    socket.on('duel_skip_enigma', async ({ duelId }) => {
-        try {
-            const strDuelId = String(duelId);
-            if (buzzerTimeouts.has(strDuelId)) {
-                clearTimeout(buzzerTimeouts.get(strDuelId));
-                buzzerTimeouts.delete(strDuelId);
-            }
-
-            const result = await duelService.skipEnigma(strDuelId);
-            if (result) {
-                io.to(`duel_${strDuelId}`).emit('duel_enigma_skipped', {
-                    scores: result.scores,
-                    currentEnigmaIndex: result.currentEnigmaIndex,
-                    nextEnigma: result.nextEnigma,
-                    isLastEnigma: result.isLastEnigma
-                });
-
-                if (result.isLastEnigma) {
-                    const finalSummary = await duelService.finishDuel(strDuelId);
-                    io.to(`duel_${strDuelId}`).emit('duel_game_over', {
-                        duel: finalSummary,
-                        reason: 'all_enigmas_completed'
-                    });
-                    roomPresences.delete(strDuelId);
-                }
-            }
-        } catch (error) {
-            console.error('[SOCKET_DUEL] Erreur skip enigma:', error.message);
-        }
-    });
-
-    socket.on('duel_finish', async ({ duelId }) => {
-        try {
-            const strDuelId = String(duelId);
-            if (buzzerTimeouts.has(strDuelId)) {
-                clearTimeout(buzzerTimeouts.get(strDuelId));
-                buzzerTimeouts.delete(strDuelId);
-            }
-
-            const finalSummary = await duelService.finishDuel(strDuelId);
-            io.to(`duel_${strDuelId}`).emit('duel_game_over', {
-                duel: finalSummary,
-                reason: 'time_expired'
-            });
-            roomPresences.delete(strDuelId);
-        } catch (error) {
-            console.error('[SOCKET_DUEL] Erreur finish duel:', error.message);
-        }
-    });
-
-    socket.on('duel_forfeit', async ({ duelId, userId }) => {
-        try {
-            const strDuelId = String(duelId);
-            const result = await duelService.forfeitDuel(userId, strDuelId);
-            if (result) {
-                io.to(`duel_${strDuelId}`).emit('duel_forfeited', {
-                    duelId: strDuelId,
-                    forfeiterId: String(result.forfeiterId),
-                    opponentId: String(result.opponentId),
-                    penaltyKevs: result.penaltyKevs,
-                    winnerName: result.winnerName,
-                    reason: 'voluntary_forfeit'
-                });
-                io.to(String(result.forfeiterId)).emit('duel_session_ended', { duelId: strDuelId });
-                io.to(String(result.opponentId)).emit('duel_session_ended', { duelId: strDuelId });
-                roomPresences.delete(strDuelId);
-            }
-        } catch (error) {
-            console.error('[SOCKET_DUEL] Erreur forfeit:', error.message);
-        }
-    });
-
-    // GESTION RÉSEAU : Déconnexion inopinée (Coupure réseau, batterie, fermeture forcée)
-    socket.on('disconnect', async () => {
-        if (socketDuelMap.has(socket.id)) {
-            const { duelId, userId } = socketDuelMap.get(socket.id);
-            socketDuelMap.delete(socket.id);
-
+          const disconnectKey = `${duelId}_${userId}`;
+          const timer = setTimeout(async () => {
             try {
-                const duel = await DuelSession.findById(duelId).lean();
-                if (duel && (duel.status === 'in_progress' || duel.status === 'ready')) {
-                    const roomName = `duel_${duelId}`;
-                    io.to(roomName).emit('duel_player_disconnected', {
-                        userId,
-                        graceSeconds: 15
-                    });
-                    console.log(`[SOCKET_DUEL] Joueur ${userId} déconnecté du duel ${duelId}. Délai de grâce : 15s`);
-
-                    const disconnectKey = `${duelId}_${userId}`;
-                    const timer = setTimeout(async () => {
-                        try {
-                            const result = await duelService.forfeitDuel(userId, duelId);
-                            if (result) {
-                                io.to(roomName).emit('duel_forfeited', {
-                                    duelId,
-                                    forfeiterId: String(result.forfeiterId),
-                                    opponentId: String(result.opponentId),
-                                    penaltyKevs: result.penaltyKevs,
-                                    winnerName: result.winnerName,
-                                    reason: 'disconnection_timeout'
-                                });
-                                io.to(String(result.opponentId)).emit('duel_session_ended', { duelId });
-                                roomPresences.delete(duelId);
-                                console.log(`[SOCKET_DUEL] Duel ${duelId} clôturé par forfait après 15s de déconnexion`);
-                            }
-                        } catch (timeoutErr) {
-                            console.warn('[SOCKET_DUEL] Erreur clôture déconnexion:', timeoutErr.message);
-                        } finally {
-                            disconnectTimers.delete(disconnectKey);
-                        }
-                    }, 15000);
-
-                    disconnectTimers.set(disconnectKey, timer);
-                }
-            } catch (discErr) {
-                console.error('[SOCKET_DUEL] Erreur gestion disconnect:', discErr.message);
+              const result = await duelService.forfeitDuel(userId, duelId);
+              if (result) {
+                io.to(roomName).emit('duel_forfeited', {
+                  duelId,
+                  forfeiterId: String(result.forfeiterId),
+                  opponentId: String(result.opponentId),
+                  penaltyKevs: result.penaltyKevs,
+                  winnerName: result.winnerName,
+                  reason: 'disconnection_timeout',
+                });
+                io.to(String(result.opponentId)).emit('duel_session_ended', { duelId });
+                roomPresences.delete(duelId);
+              }
+            } catch (timeoutErr) {
+              console.warn('[SOCKET_DUEL] Erreur cloture deconnexion:', timeoutErr.message);
+            } finally {
+              disconnectTimers.delete(disconnectKey);
             }
+          }, 15000);
+
+          disconnectTimers.set(disconnectKey, timer);
         }
-    });
+      } catch (discErr) {
+        console.error('[SOCKET_DUEL] Erreur gestion disconnect:', discErr.message);
+      }
+    }
+  });
 };

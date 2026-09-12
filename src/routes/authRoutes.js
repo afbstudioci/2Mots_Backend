@@ -18,6 +18,9 @@ router.post('/google', authLimiter, authController.googleAuth);
 router.post('/fcm-token', protect, authController.updateFcmToken);
 router.put('/fcm-token', protect, authController.updateFcmToken);
 router.delete('/fcm-token', protect, authController.removeFcmToken);
+router.post('/push-token', protect, authController.updateFcmToken);
+router.put('/push-token', protect, authController.updateFcmToken);
+router.delete('/push-token', protect, authController.removeFcmToken);
 router.post('/refresh-token', authController.refreshToken);
 router.post('/forgot-password', authLimiter, authController.forgotPassword);
 
