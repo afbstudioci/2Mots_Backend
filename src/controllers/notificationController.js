@@ -98,3 +98,53 @@ exports.deleteNotification = async (req, res, next) => {
         next(error);
     }
 };
+
+/**
+ * Enregistre ou met a jour le token push Expo de l'utilisateur
+ */
+exports.savePushToken = async (req, res, next) => {
+    try {
+        const { token, platform = 'android', fcmToken } = req.body;
+        const pushToken = token || fcmToken;
+        const userId = req.user?.id || req.user?._id;
+
+        const { Expo } = require('expo-server-sdk');
+        const User = require('../models/User');
+
+        if (!pushToken || !Expo.isExpoPushToken(pushToken)) {
+            return res.status(400).json({ status: 'fail', message: 'Token Expo Push invalide ou manquant.' });
+        }
+
+        const user = await User.findById(userId);
+        if (!user) {
+            return res.status(404).json({ status: 'fail', message: 'Utilisateur non trouve.' });
+        }
+
+        if (!user.pushTokens) {
+            user.pushTokens = [];
+        }
+
+        const cleanToken = String(pushToken).trim();
+        const exists = user.pushTokens.some((t) => t.token === cleanToken);
+
+        if (!exists) {
+            user.pushTokens.push({
+                token: cleanToken,
+                platform: platform || 'android',
+                updatedAt: new Date(),
+            });
+        } else {
+            const idx = user.pushTokens.findIndex((t) => t.token === cleanToken);
+            if (idx !== -1) user.pushTokens[idx].updatedAt = new Date();
+        }
+
+        user.fcmToken = cleanToken;
+        await user.save();
+
+        console.log(`[PUSH] Token enregistre avec succes pour ${user.login} (${userId})`);
+        return res.status(200).json({ status: 'success', message: 'Token push enregistre.' });
+    } catch (error) {
+        console.error('[PUSH_CONTROLLER] Erreur sauvegarde token:', error);
+        next(error);
+    }
+};

@@ -93,6 +93,11 @@ const userSchema = new mongoose.Schema({
         default: null,
         select: false
     },
+    pushTokens: [{
+        token: { type: String, required: true },
+        platform: { type: String, default: 'android' },
+        updatedAt: { type: Date, default: Date.now }
+    }],
     blockedUsers: [{
         type: mongoose.Schema.Types.ObjectId,
         ref: 'User'
