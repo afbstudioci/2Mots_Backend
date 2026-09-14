@@ -21,6 +21,9 @@ notificationService.setIo(io);
 const presenceService = require('./services/presenceService');
 presenceService.setIo(io);
 
+const happyHourService = require('./services/happyHourService');
+happyHourService.setIo(io);
+
 app.set('io', io);
 
 io.on('connection', (socket) => {
@@ -121,11 +124,15 @@ io.on('connection', (socket) => {
 });
 
 const vaultService = require('./services/vaultService');
+const initRetentionWorker = require('./workers/retentionWorker');
+const initHappyHourWorker = require('./workers/happyHourWorker');
 
 connectDB().then(() => {
     server.listen(port, () => {
         console.log(`[SERVEUR] Démarré sur le port ${port} avec Socket.io prêt`);
         vaultService.preloadAllTiers();
+        initRetentionWorker();
+        initHappyHourWorker();
     });
 }).catch(err => {
     console.error('[SERVEUR] Échec critique au démarrage :', err);

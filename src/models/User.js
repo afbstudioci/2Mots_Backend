@@ -98,6 +98,24 @@ const userSchema = new mongoose.Schema({
         platform: { type: String, default: 'android' },
         updatedAt: { type: Date, default: Date.now }
     }],
+    lastActiveAt: {
+        type: Date,
+        default: Date.now,
+        index: true
+    },
+    inactivityReminderStage: {
+        type: Number,
+        default: 0,
+        index: true
+    },
+    lastInactivityPushAt: {
+        type: Date,
+        default: null
+    },
+    returnGiftClaimable: {
+        type: Boolean,
+        default: false
+    },
     blockedUsers: [{
         type: mongoose.Schema.Types.ObjectId,
         ref: 'User'
@@ -135,7 +153,13 @@ const userSchema = new mongoose.Schema({
         friendId: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
         isMuted: { type: Boolean, default: false },
         theme: { type: String, default: 'default' }
-    }]
+    }],
+    adRewards: {
+        dailyShopCount: { type: Number, default: 0 },
+        lastShopWatchedAt: { type: Date, default: null },
+        dailyResetDate: { type: String, default: () => new Date().toISOString().split('T')[0] },
+        totalAdsWatched: { type: Number, default: 0 }
+    }
 }, { timestamps: true, versionKey: false });
 
 userSchema.index({ 'playedWords.word': 1, 'playedWords.cooldownUntil': 1 });

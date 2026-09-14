@@ -1,6 +1,7 @@
 //src/services/duelEngine.js
 const DuelSession = require('../models/DuelSession');
 const User = require('../models/User');
+const happyHourService = require('./happyHourService');
 
 exports.startDuelGame = async (duelId) => {
     const duel = await DuelSession.findById(duelId)
@@ -121,19 +122,22 @@ exports.finishDuel = async (duelId) => {
     duel.status = 'completed';
     duel.endedAt = new Date();
 
+    const multiplier = happyHourService.getHappyHourMultiplier();
+    const winXp = 50 * multiplier;
+
     if (duel.scores.challenger > duel.scores.opponent) {
         duel.winner = duel.challenger;
         duel.isDraw = false;
         await Promise.all([
             User.updateOne({ _id: duel.opponent }, { $inc: { kevs: -duel.betAmount } }),
-            User.updateOne({ _id: duel.challenger }, { $inc: { kevs: duel.betAmount, xp: 50 } })
+            User.updateOne({ _id: duel.challenger }, { $inc: { kevs: duel.betAmount, xp: winXp } })
         ]);
     } else if (duel.scores.opponent > duel.scores.challenger) {
         duel.winner = duel.opponent;
         duel.isDraw = false;
         await Promise.all([
             User.updateOne({ _id: duel.challenger }, { $inc: { kevs: -duel.betAmount } }),
-            User.updateOne({ _id: duel.opponent }, { $inc: { kevs: duel.betAmount, xp: 50 } })
+            User.updateOne({ _id: duel.opponent }, { $inc: { kevs: duel.betAmount, xp: winXp } })
         ]);
     } else {
         duel.isDraw = true;

@@ -2,6 +2,7 @@ const WordPair = require('../models/WordPair');
 const User = require('../models/User');
 const missionService = require('./missionService');
 const vaultService = require('./vaultService');
+const happyHourService = require('./happyHourService');
 const { FALLBACK_VERBS, FALLBACK_NOUNS, FALLBACK_ADJ } = require('../utils/gameFallbacks');
 
 const createError = (message, statusCode = 400) => {
@@ -113,11 +114,14 @@ const checkAnswerRealtime = async (userId, wordPairId, userAnswer, timeSpent) =>
     let timeWon = 0, earnedKevs = 0, leveledUp = false, currentXp = user.xp, newLevel = user.level, isFastCombo = false;
     if (isCorrect) {
         await missionService.updateMissionProgress(userId, 'words_solved');
+        const multiplier = happyHourService.getHappyHourMultiplier();
         isFastCombo = timeSpent <= 3;
         const totalSolved = (user.playedWords ? user.playedWords.length : 0) + 1;
-        earnedKevs = isFastCombo ? 1 : (totalSolved % 2 === 0 ? 1 : 0);
+        const baseKevs = isFastCombo ? 1 : (totalSolved % 2 === 0 ? 1 : 0);
+        earnedKevs = baseKevs * multiplier;
         user.kevs = (user.kevs || 0) + earnedKevs;
-        user.xp = (user.xp || 0) + (isFastCombo ? 2 : 1);
+        const earnedXp = (isFastCombo ? 2 : 1) * multiplier;
+        user.xp = (user.xp || 0) + earnedXp;
         currentXp = user.xp;
         const enigmasNeeded = 3 + user.level * 2;
         if (user.xp >= enigmasNeeded) {
@@ -126,8 +130,8 @@ const checkAnswerRealtime = async (userId, wordPairId, userAnswer, timeSpent) =>
             currentXp = user.xp;
             newLevel = user.level;
             leveledUp = true;
-            earnedKevs += 5;
-            user.kevs += 5;
+            earnedKevs += 5 * multiplier;
+            user.kevs += 5 * multiplier;
             await missionService.updateMissionProgress(userId, 'levels_reached');
         }
         timeWon = timeSpent <= 5 ? 8 : (timeSpent <= 15 ? 5 : 3);
@@ -238,8 +242,9 @@ const syncOfflineSession = async (userId, sessionData) => {
     if (!rounds || !Array.isArray(rounds)) throw createError('Session invalide', 400);
 
     let calculatedScore = 0, earnedKevs = 0;
+    const multiplier = happyHourService.getHappyHourMultiplier();
     for (const r of rounds) {
-        if (r.isCorrect) { calculatedScore += 10; earnedKevs += 1; }
+        if (r.isCorrect) { calculatedScore += 10; earnedKevs += (1 * multiplier); }
     }
     user.kevs = (user.kevs || 0) + earnedKevs;
     if (calculatedScore > (user.bestScore || 0)) user.bestScore = calculatedScore;

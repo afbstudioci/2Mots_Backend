@@ -127,6 +127,28 @@ module.exports = (io, socket) => {
             console.warn('[SOCKET_DUEL] Erreur push alerte challenger:', notifErr.message);
           });
         }
+
+        // Alerte bidirectionnelle : si le challenger entre et que l'adversaire n'est pas encore la
+        if (strUserId === challengerId && !presenceSet.has(opponentId)) {
+          const challengerName = duel.challenger?.login || 'Votre adversaire';
+          io.to(String(opponentId)).emit('duel_match_alert', {
+            duelId: strDuelId,
+            opponentId: strUserId,
+            opponentName: challengerName,
+            opponentAvatar: duel.challenger?.avatar,
+            opponentLevel: duel.challenger?.level,
+            betAmount: duel.betAmount || 25,
+            expiresAt: currentLobby?.expiresAt || (Date.now() + 60000),
+          });
+
+          notificationService.sendNotification(
+            opponentId,
+            'Adversaire dans l\'arene !',
+            `${challengerName} vous attend dans l'arene de duel ! Rejoignez vite la partie !`,
+            'duel_accepted',
+            { duelId: strDuelId, challengerName }
+          ).catch(() => {});
+        }
       }
     } catch (error) {
       console.error('[SOCKET_DUEL] Erreur join duel:', error.message);

@@ -74,7 +74,7 @@ exports.respondToDuelInvite = async (opponentId, duelId, accept) => {
         await duel.save();
         try {
             await notificationService.onDuelRejected(duel.challenger._id, duel.opponent.login);
-        } catch {}
+        } catch { }
         return { status: 'rejected', duelId: duel._id, challenger: duel.challenger };
     }
 
@@ -93,34 +93,6 @@ exports.respondToDuelInvite = async (opponentId, duelId, accept) => {
         duel.status = 'cancelled';
         await duel.save();
         throw new Error('Vous n\'avez plus assez de Kevs pour accepter ce duel.');
-    }
-
-    // Verification de presence en direct du challenger
-    const isChallengerOnline = presenceService.isUserOnline(duel.challenger._id);
-    if (!isChallengerOnline) {
-        try {
-            await notificationService.sendNotification(
-                duel.challenger._id,
-                'Défi accepté !',
-                `${duel.opponent.login} a accepté votre défi (${duel.betAmount} Kevs) ! Connectez-vous vite pour lancer le duel !`,
-                'duel_opponent_ready',
-                {
-                    duelId: String(duel._id),
-                    opponentName: duel.opponent.login,
-                    betAmount: String(duel.betAmount)
-                },
-                duel.opponent._id
-            );
-        } catch (e) {
-            console.warn('[DUEL] Erreur notification challenger offline:', e.message);
-        }
-
-        return {
-            status: 'challenger_offline',
-            duelId: duel._id,
-            challengerName: duel.challenger.login,
-            message: `${duel.challenger.login} n'est pas connecté actuellement. Une notification lui a été envoyée.`
-        };
     }
 
     const rawBatch = await vaultService.getEnigmaBatch(5, [], 20);
@@ -151,9 +123,17 @@ exports.respondToDuelInvite = async (opponentId, duelId, accept) => {
     duel.startedAt = null;
     await duel.save();
 
+    // Notification Push + Socket vers le challenger pour le reveiller et l'inviter a rejoindre l'arene
     try {
-        await notificationService.onDuelAccepted(duel.challenger._id, duel.opponent.login, duel._id);
-    } catch {}
+        await notificationService.onDuelAccepted(
+            duel.challenger._id,
+            duel.opponent.login,
+            duel._id,
+            duel.opponent._id
+        );
+    } catch (e) {
+        console.warn('[DUEL] Erreur notification push acceptation:', e.message);
+    }
 
     return duel;
 };

@@ -15,6 +15,7 @@ router.post('/end', gameController.validateSession);
 router.post('/sync-level', gameController.syncLevel);
 router.post('/chest-opened', gameController.claimChest);
 router.post('/sync-keys', gameController.syncKeys);
+router.get('/happy-hour', gameController.getHappyHourStatus);
 router.post('/sync-offline', gameController.syncOffline);
 
 module.exports = router;

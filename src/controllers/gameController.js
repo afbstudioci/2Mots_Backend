@@ -3,6 +3,7 @@ const WordPair = require('../models/WordPair');
 const gameService = require('../services/gameService');
 const vaultService = require('../services/vaultService');
 const leaderboardService = require('../services/leaderboardService');
+const happyHourService = require('../services/happyHourService');
 const mongoose = require('mongoose');
 
 const getBatch = async (req, res, next) => {
@@ -119,6 +120,11 @@ const syncOffline = async (req, res, next) => {
     }
 };
 
+const getHappyHourStatus = (req, res) => {
+    const status = happyHourService.getHappyHourStatus();
+    res.status(200).json({ status: 'success', data: status });
+};
+
 module.exports = {
     getBatch,
     checkAnswer,
@@ -127,5 +133,6 @@ module.exports = {
     syncLevel,
     claimChest,
     syncKeys,
-    syncOffline
+    syncOffline,
+    getHappyHourStatus
 };
