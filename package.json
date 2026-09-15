@@ -24,6 +24,7 @@
   "homepage": "https://github.com/afbstudioci/2Mots_Backend#readme",
   "dependencies": {
     "@google/generative-ai": "^0.24.1",
+    "axios": "^1.7.9",
     "bcryptjs": "^3.0.3",
     "cloudinary": "^2.10.0",
     "cookie-parser": "^1.4.7",
