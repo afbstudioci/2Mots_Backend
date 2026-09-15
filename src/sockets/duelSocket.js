@@ -117,15 +117,6 @@ module.exports = (io, socket) => {
             betAmount: duel.betAmount || 25,
             expiresAt: currentLobby?.expiresAt || (Date.now() + 60000),
           });
-
-          notificationService.onDuelAccepted(
-            challengerId,
-            opponentName,
-            strDuelId,
-            strUserId
-          ).catch((notifErr) => {
-            console.warn('[SOCKET_DUEL] Erreur push alerte challenger:', notifErr.message);
-          });
         }
 
         // Alerte bidirectionnelle : si le challenger entre et que l'adversaire n'est pas encore la

@@ -83,7 +83,17 @@ exports.onDuelInvite = async (recipientId, challengerName, betAmount, duelId, ch
   );
 };
 
+const duelNotifDedupe = new Map();
+
 exports.onDuelAccepted = async (challengerId, opponentName, duelId, opponentId = null) => {
+  const dedupeKey = `duel_accepted_${challengerId}_${duelId}`;
+  const now = Date.now();
+  if (duelNotifDedupe.has(dedupeKey) && now - duelNotifDedupe.get(dedupeKey) < 30000) {
+    console.log(`[NOTIF] Notification duel_accepted déjà envoyée pour le duel ${duelId} (Dédoublonnage actif)`);
+    return;
+  }
+  duelNotifDedupe.set(dedupeKey, now);
+
   await exports.sendNotification(
     challengerId,
     'Defi accepte !',

@@ -1,5 +1,6 @@
 //src/controllers/authController.js
 const authService = require('../services/authService');
+const passwordResetService = require('../services/passwordResetService');
 const cloudinary = require('../config/cloudinary');
 const { registerSchema, loginSchema } = require('../middlewares/validators');
 const { z } = require('zod');
@@ -143,13 +144,32 @@ exports.updateProfile = async (req, res) => {
 exports.forgotPassword = async (req, res) => {
     try {
         const { email } = req.body;
-        const resetToken = await authService.requestPasswordReset(email);
-        if (!resetToken) {
-            return res.status(200).json({ status: 'success', message: 'Si cette adresse e-mail existe, un lien a été envoyé.' });
+        if (!email) {
+            return res.status(400).json({ status: 'fail', message: "L'adresse email est requise." });
         }
-        return res.status(200).json({ status: 'success', message: 'Jeton de réinitialisation généré.', data: { resetToken } });
+        await passwordResetService.forgotPassword(email);
+        return res.status(200).json({
+            status: 'success',
+            message: "Si cette adresse est enregistrée, un e-mail contenant le code de sécurité vient d'être envoyé."
+        });
     } catch (error) {
-        return res.status(500).json({ status: 'error', message: 'Erreur lors de la demande de réinitialisation.' });
+        return res.status(400).json({ status: 'fail', message: error.message || 'Erreur lors de la demande.' });
+    }
+};
+
+exports.resetPassword = async (req, res) => {
+    try {
+        const { email, otp, newPassword } = req.body;
+        if (!email || !otp || !newPassword) {
+            return res.status(400).json({ status: 'fail', message: 'Email, code et nouveau mot de passe sont requis.' });
+        }
+        await passwordResetService.resetPasswordWithOtp(email, otp, newPassword);
+        return res.status(200).json({
+            status: 'success',
+            message: 'Votre mot de passe a été réinitialisé avec succès. Vous pouvez maintenant vous connecter.'
+        });
+    } catch (error) {
+        return res.status(400).json({ status: 'fail', message: error.message || 'Code invalide ou expiré.' });
     }
 };
 

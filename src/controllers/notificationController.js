@@ -104,7 +104,7 @@ exports.deleteNotification = async (req, res, next) => {
  */
 exports.savePushToken = async (req, res, next) => {
     try {
-        const { token, platform = 'android', fcmToken } = req.body;
+        const { token, platform = 'android', fcmToken, appVersionCode } = req.body;
         const pushToken = token || fcmToken;
         const userId = req.user?.id || req.user?._id;
 
@@ -139,12 +139,87 @@ exports.savePushToken = async (req, res, next) => {
         }
 
         user.fcmToken = cleanToken;
+
+        if (appVersionCode && Number.isInteger(Number(appVersionCode))) {
+            user.appVersionCode = Number(appVersionCode);
+        }
+
         await user.save();
 
-        console.log(`[PUSH] Token enregistre avec succes pour ${user.login} (${userId})`);
+        console.log(`[PUSH] Token enregistre avec succes pour ${user.login} (version: ${user.appVersionCode})`);
         return res.status(200).json({ status: 'success', message: 'Token push enregistre.' });
     } catch (error) {
         console.error('[PUSH_CONTROLLER] Erreur sauvegarde token:', error);
         next(error);
     }
 };
+
+/**
+ * Diffuse une notification push de mise a jour ciblee aux utilisateurs ayant une version inferieure
+ */
+exports.broadcastUpdateNotification = async (req, res, next) => {
+    try {
+        const User = require('../models/User');
+        const { sendAndroidPushNotification } = require('../services/expoPushService');
+
+        const adminSecret = req.headers['x-admin-key'];
+        const isAdmin =
+            req.user?.role === 'admin' ||
+            req.user?.role === 'superadmin' ||
+            (process.env.ADMIN_SECRET_KEY && adminSecret === process.env.ADMIN_SECRET_KEY);
+
+        if (!isAdmin) {
+            return res.status(403).json({ status: 'fail', message: 'Action reservee aux administrateurs.' });
+        }
+
+        const targetVersionCode =
+            parseInt(req.body?.targetVersionCode, 10) ||
+            parseInt(process.env.LATEST_VERSION_CODE, 10) ||
+            16;
+
+        const title = req.body?.title || process.env.UPDATE_TITLE || 'Mise à jour disponible';
+        const message =
+            req.body?.message ||
+            process.env.UPDATE_MESSAGE ||
+            'Une nouvelle version de 2Mots est disponible sur le Play Store. Mettez à jour votre jeu pour profiter des nouveautés !';
+        const storeUrl =
+            process.env.STORE_URL ||
+            'https://play.google.com/store/apps/details?id=com.afbstudio.twomots';
+
+        // Selectionne uniquement les utilisateurs dont la version est strictement inferieure
+        const outdatedUsers = await User.find({
+            appVersionCode: { $lt: targetVersionCode },
+            $or: [{ 'pushTokens.0': { $exists: true } }, { fcmToken: { $ne: null } }],
+        })
+            .select('_id')
+            .lean();
+
+        const userIds = outdatedUsers.map((u) => u._id);
+
+        if (userIds.length > 0) {
+            await sendAndroidPushNotification({
+                userIds,
+                title,
+                body: message,
+                data: {
+                    type: 'app_update',
+                    targetVersionCode: String(targetVersionCode),
+                    storeUrl,
+                },
+            });
+        }
+
+        return res.status(200).json({
+            status: 'success',
+            message: `Notification de mise a jour envoyee a ${userIds.length} utilisateur(s).`,
+            data: {
+                targetedCount: userIds.length,
+                targetVersionCode,
+            },
+        });
+    } catch (error) {
+        console.error('[PUSH_UPDATE_BROADCAST] Erreur diffusion:', error);
+        next(error);
+    }
+};
+

@@ -72,8 +72,14 @@ const userSchema = new mongoose.Schema({
         type: String,
         default: null
     },
-    resetPasswordToken: String,
-    resetPasswordExpires: Date,
+    resetPasswordOtp: {
+        type: String,
+        select: false
+    },
+    resetPasswordExpires: {
+        type: Date,
+        select: false
+    },
     refreshTokens: [{ type: String }],
     referralCode: {
         type: String,
@@ -98,6 +104,11 @@ const userSchema = new mongoose.Schema({
         platform: { type: String, default: 'android' },
         updatedAt: { type: Date, default: Date.now }
     }],
+    appVersionCode: {
+        type: Number,
+        default: 1,
+        index: true
+    },
     lastActiveAt: {
         type: Date,
         default: Date.now,
@@ -122,9 +133,20 @@ const userSchema = new mongoose.Schema({
     }],
     isVip: {
         type: Boolean,
-        default: false
+        default: false,
+        index: true
     },
     vipExpiresAt: {
+        type: Date,
+        default: null,
+        index: true
+    },
+    vipReminderStage: {
+        type: Number,
+        default: 0,
+        index: true
+    },
+    lastVipPushAt: {
         type: Date,
         default: null
     },

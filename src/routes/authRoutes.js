@@ -12,6 +12,12 @@ const authLimiter = rateLimit({
     message: { status: 'error', message: 'Trop de tentatives. Veuillez réessayer dans 15 minutes.' }
 });
 
+const forgotPasswordLimiter = rateLimit({
+    windowMs: 60 * 1000,
+    max: 3,
+    message: { status: 'error', message: 'Trop de demandes. Veuillez patienter 1 minute avant de réessayer.' }
+});
+
 router.post('/register', authLimiter, authController.register);
 router.post('/login', authLimiter, authController.login);
 router.post('/google', authLimiter, authController.googleAuth);
@@ -22,7 +28,8 @@ router.post('/push-token', protect, authController.updateFcmToken);
 router.put('/push-token', protect, authController.updateFcmToken);
 router.delete('/push-token', protect, authController.removeFcmToken);
 router.post('/refresh-token', authController.refreshToken);
-router.post('/forgot-password', authLimiter, authController.forgotPassword);
+router.post('/forgot-password', forgotPasswordLimiter, authController.forgotPassword);
+router.post('/reset-password', authLimiter, authController.resetPassword);
 
 router.get('/me', protect, authController.getMe);
 router.post('/logout', protect, authController.logout);

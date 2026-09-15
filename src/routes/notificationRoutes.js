@@ -6,8 +6,10 @@ const { protect } = require('../middlewares/auth');
 
 router.get('/', protect, notificationController.getNotifications);
 router.post('/push-token', protect, notificationController.savePushToken);
+router.post('/broadcast-update', protect, notificationController.broadcastUpdateNotification);
 router.put('/:id/read', protect, notificationController.markAsRead);
 router.patch('/:id/read', protect, notificationController.markAsRead);
 router.delete('/:id', protect, notificationController.deleteNotification);
 
 module.exports = router;
+

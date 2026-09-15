@@ -151,6 +151,8 @@ exports.verifyInAppPurchase = async (req, res) => {
         if (packId === 'vip_monthly' || packId === 'vip') {
             user.isVip = true;
             user.vipExpiresAt = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000);
+            user.vipReminderStage = 0;
+            user.lastVipPushAt = null;
             user.kevs = (user.kevs || 0) + 150;
         } else {
             const pack = CATALOG.kevsPacks.find(p => p.id === packId);
