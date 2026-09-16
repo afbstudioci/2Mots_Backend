@@ -124,6 +124,7 @@ io.on('connection', (socket) => {
 });
 
 const vaultService = require('./services/vaultService');
+const versionService = require('./services/versionService');
 const initRetentionWorker = require('./workers/retentionWorker');
 const initHappyHourWorker = require('./workers/happyHourWorker');
 
@@ -131,6 +132,7 @@ connectDB().then(() => {
     server.listen(port, () => {
         console.log(`[SERVEUR] Démarré sur le port ${port} avec Socket.io prêt`);
         vaultService.preloadAllTiers();
+        versionService.checkAndBroadcastOnStartup();
         initRetentionWorker();
         initHappyHourWorker();
     });

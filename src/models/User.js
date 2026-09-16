@@ -123,6 +123,11 @@ const userSchema = new mongoose.Schema({
         type: Date,
         default: null
     },
+    lastDailyPushAt: {
+        type: Date,
+        default: null,
+        index: true
+    },
     returnGiftClaimable: {
         type: Boolean,
         default: false

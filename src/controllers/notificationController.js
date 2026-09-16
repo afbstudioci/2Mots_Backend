@@ -159,8 +159,7 @@ exports.savePushToken = async (req, res, next) => {
  */
 exports.broadcastUpdateNotification = async (req, res, next) => {
     try {
-        const User = require('../models/User');
-        const { sendAndroidPushNotification } = require('../services/expoPushService');
+        const versionService = require('../services/versionService');
 
         const adminSecret = req.headers['x-admin-key'];
         const isAdmin =
@@ -172,50 +171,17 @@ exports.broadcastUpdateNotification = async (req, res, next) => {
             return res.status(403).json({ status: 'fail', message: 'Action reservee aux administrateurs.' });
         }
 
-        const targetVersionCode =
-            parseInt(req.body?.targetVersionCode, 10) ||
-            parseInt(process.env.LATEST_VERSION_CODE, 10) ||
-            16;
-
-        const title = req.body?.title || process.env.UPDATE_TITLE || 'Mise à jour disponible';
-        const message =
-            req.body?.message ||
-            process.env.UPDATE_MESSAGE ||
-            'Une nouvelle version de 2Mots est disponible sur le Play Store. Mettez à jour votre jeu pour profiter des nouveautés !';
-        const storeUrl =
-            process.env.STORE_URL ||
-            'https://play.google.com/store/apps/details?id=com.afbstudio.twomots';
-
-        // Selectionne uniquement les utilisateurs dont la version est strictement inferieure
-        const outdatedUsers = await User.find({
-            appVersionCode: { $lt: targetVersionCode },
-            $or: [{ 'pushTokens.0': { $exists: true } }, { fcmToken: { $ne: null } }],
-        })
-            .select('_id')
-            .lean();
-
-        const userIds = outdatedUsers.map((u) => u._id);
-
-        if (userIds.length > 0) {
-            await sendAndroidPushNotification({
-                userIds,
-                title,
-                body: message,
-                data: {
-                    type: 'app_update',
-                    targetVersionCode: String(targetVersionCode),
-                    storeUrl,
-                },
-            });
-        }
+        const result = await versionService.broadcastUpdate({
+            targetVersionCode: req.body?.targetVersionCode,
+            title: req.body?.title,
+            message: req.body?.message,
+            storeUrl: req.body?.storeUrl,
+        });
 
         return res.status(200).json({
             status: 'success',
-            message: `Notification de mise a jour envoyee a ${userIds.length} utilisateur(s).`,
-            data: {
-                targetedCount: userIds.length,
-                targetVersionCode,
-            },
+            message: `Notification de mise a jour envoyee a ${result.targetedCount} utilisateur(s).`,
+            data: result,
         });
     } catch (error) {
         console.error('[PUSH_UPDATE_BROADCAST] Erreur diffusion:', error);

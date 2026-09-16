@@ -165,3 +165,73 @@ exports.processInactivityReminders = async () => {
     throw error;
   }
 };
+
+/**
+ * Routine quotidienne de rappel a 18h00 :
+ * Cible les utilisateurs qui n'ont pas ouvert l'application aujourd'hui (lastActiveAt < debut de journee).
+ * Limite a 1 notification quotidienne max via lastDailyPushAt.
+ */
+exports.processDailyEngagementReminders = async () => {
+  console.log('[RETENTION_CRON] Verification des inactifs du jour (Rappel 18h00)...');
+
+  try {
+    const startOfToday = new Date();
+    startOfToday.setHours(0, 0, 0, 0);
+
+    const filter = {
+      isBanned: false,
+      lastActiveAt: { $lt: startOfToday },
+      $or: [
+        { lastDailyPushAt: null },
+        { lastDailyPushAt: { $lt: startOfToday } },
+      ],
+      $and: [
+        {
+          $or: [
+            { 'pushTokens.0': { $exists: true } },
+            { fcmToken: { $ne: null } },
+          ],
+        },
+      ],
+    };
+
+    let skip = 0;
+    let totalSent = 0;
+    const title = 'Votre défi quotidien vous attend !';
+    const body = 'Une partie rapide vous attend sur 2Mots. Venez tester vos neurones ce soir !';
+
+    while (true) {
+      const users = await User.find(filter)
+        .select('_id pushTokens fcmToken login')
+        .skip(skip)
+        .limit(BATCH_SIZE)
+        .lean();
+
+      if (!users || users.length === 0) break;
+
+      const userIds = users.map((u) => String(u._id));
+
+      await expoPushService.sendAndroidPushNotification({
+        userIds,
+        title,
+        body,
+        data: { type: 'daily_reminder', screen: 'Home' },
+      });
+
+      await User.updateMany(
+        { _id: { $in: userIds } },
+        { lastDailyPushAt: new Date() }
+      );
+
+      totalSent += users.length;
+      skip += BATCH_SIZE;
+    }
+
+    console.log(`[RETENTION_CRON] Rappel quotidien 18h diffuse a ${totalSent} utilisateur(s).`);
+    return totalSent;
+  } catch (error) {
+    console.error('[RETENTION_CRON] Erreur rappel quotidien 18h:', error.message);
+    throw error;
+  }
+};
+
