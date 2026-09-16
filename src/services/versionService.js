@@ -101,19 +101,7 @@ exports.checkAndBroadcastOnStartup = async () => {
     const currentLatestCode = parseInt(process.env.LATEST_VERSION_CODE, 10) || 42;
 
     const setting = await SystemSetting.findOne({ key: SETTING_KEY_LAST_BROADCASTED_VERSION }).lean();
-
-    if (!setting) {
-      // Premier demarrage avec le nouveau systeme : enregistrement du jalon initial
-      await SystemSetting.create({
-        key: SETTING_KEY_LAST_BROADCASTED_VERSION,
-        value: currentLatestCode,
-        description: 'Jalon initial du versionCode diffuse',
-      });
-      console.log(`[VERSION_SERVICE] Jalon initial de version enregistre : ${currentLatestCode}`);
-      return;
-    }
-
-    const lastBroadcastedCode = parseInt(setting.value, 10) || 0;
+    const lastBroadcastedCode = setting ? (parseInt(setting.value, 10) || 0) : 0;
 
     if (currentLatestCode > lastBroadcastedCode) {
       console.log(
