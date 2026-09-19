@@ -6,6 +6,7 @@ const gameService = require('../services/gameService');
 const vaultService = require('../services/vaultService');
 const leaderboardService = require('../services/leaderboardService');
 const happyHourService = require('../services/happyHourService');
+const { normalizeUserProgression, getXpNeededForLevel } = require('../utils/gameHelpers');
 
 const getBatch = async (req, res, next) => {
   try {
@@ -17,6 +18,10 @@ const getBatch = async (req, res, next) => {
         .map((pw) => String(pw.word)),
       ...excludeQuery,
     ];
+
+    if (req.user && normalizeUserProgression(req.user)) {
+      await req.user.save().catch(() => {});
+    }
 
     // 1. Tirage prioritaire ultra-rapide parmi la reserve authentique
     const enrichedPairs = await vaultService.getEnigmaBatch(req.user?.level || 1, played30Days, 30);
@@ -42,7 +47,7 @@ const getBatch = async (req, res, next) => {
       userStats: {
         level: req.user.level,
         xp: req.user.xp,
-        xpNeeded: 3 + req.user.level * 2,
+        xpNeeded: getXpNeededForLevel(req.user.level),
         kevs: req.user.kevs,
         kevyKeys: req.user.kevyKeys || 0,
       },

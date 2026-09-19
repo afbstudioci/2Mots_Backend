@@ -88,3 +88,40 @@ module.exports = {
   recordPlayedWords,
   recordPlayedWordsAtomic,
 };
+const correctAnswer = (rawPair.exactMatch && rawPair.exactMatch[0]) || rawPair.word1;
+const gramType = detectGrammaticalType(correctAnswer, rawPair.expectedType);
+let distractors = (rawPair.distractors && rawPair.distractors.length >= 2) ? [rawPair.distractors[0], rawPair.distractors[1]] : null;
+if (!distractors) {
+  const poolChoice = gramType === 'verbe' ? FALLBACK_VERBS : (gramType === 'adjectif' ? FALLBACK_ADJ : FALLBACK_NOUNS);
+  const filtered = shuffleArray(poolChoice.filter((w) => normalizeText(w) !== normalizeText(correctAnswer)));
+  distractors = [filtered[0] || 'Choix A', filtered[1] || 'Choix B'];
+}
+return {
+  _id: rawPair._id,
+  word1: rawPair.word1,
+  word2: rawPair.word2,
+  clue: rawPair.clue,
+  expectedType: gramType,
+  difficulty: rawPair.difficulty,
+  exactMatch: rawPair.exactMatch || [correctAnswer],
+  options: shuffleArray([correctAnswer, distractors[0], distractors[1]]),
+  hasKey: i === 17,
+};
+  });
+};
+
+module.exports = {
+  calculateCooldown,
+  normalizeText,
+  isVipActive,
+  getGameMultipliers,
+  detectGrammaticalType,
+  recordPlayedWords,
+  recordPlayedWordsAtomic,
+  getXpNeededForLevel,
+  applyXpGain,
+  normalizeUserProgression,
+  shuffleArray,
+  enrichPairsWithOptions,
+};
+

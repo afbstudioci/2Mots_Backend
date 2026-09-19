@@ -6,15 +6,7 @@ const vaultService = require('./vaultService');
 const notificationService = require('./notificationService');
 const duelEngine = require('./duelEngine');
 const presenceService = require('./presenceService');
-
-const shuffleArray = (array) => {
-    const arr = [...array];
-    for (let i = arr.length - 1; i > 0; i--) {
-        const j = Math.floor(Math.random() * (i + 1));
-        [arr[i], arr[j]] = [arr[j], arr[i]];
-    }
-    return arr;
-};
+const { applyXpGain, normalizeUserProgression, shuffleArray } = require('../utils/gameHelpers');
 
 exports.getEligibleOpponents = async (userId) => {
     const friendships = await Friendship.find({
@@ -168,12 +160,19 @@ exports.getActiveDuel = async (userId) => {
 };
 
 exports.getUserInvites = async (userId) => {
+    const cutoff = new Date(Date.now() - 24 * 60 * 60 * 1000);
+    // Nettoyage automatique en arrière-plan des invitations en attente périmées
+    await DuelSession.updateMany(
+        { status: 'pending', createdAt: { $lt: cutoff } },
+        { $set: { status: 'cancelled', endedAt: new Date() } }
+    ).catch(() => {});
+
     const [received, sent] = await Promise.all([
-        DuelSession.find({ opponent: userId, status: 'pending' })
+        DuelSession.find({ opponent: userId, status: 'pending', createdAt: { $gte: cutoff } })
             .populate('challenger', 'login avatar level isVip equippedFrame')
             .sort({ createdAt: -1 })
             .lean(),
-        DuelSession.find({ challenger: userId, status: 'pending' })
+        DuelSession.find({ challenger: userId, status: 'pending', createdAt: { $gte: cutoff } })
             .populate('opponent', 'login avatar level isVip equippedFrame')
             .sort({ createdAt: -1 })
             .lean()
@@ -228,11 +227,22 @@ exports.forfeitDuel = async (userId, duelId) => {
     // Pénalité stricte de 15% de la mise (Minimum 1 Kev)
     const penalty = Math.max(1, Math.ceil(duel.betAmount * 0.15));
 
-    // Débit de 15% sur celui qui abandonne et crédit de 15% à l'adversaire
-    await Promise.all([
-        User.updateOne({ _id: forfeiterId }, { $inc: { kevs: -penalty } }),
-        User.updateOne({ _id: opponentId }, { $inc: { kevs: penalty, xp: 20 } })
+    const [forfeiter, opponent] = await Promise.all([
+        User.findById(forfeiterId),
+        User.findById(opponentId)
     ]);
+
+    if (forfeiter) {
+        forfeiter.kevs = Math.max(0, (forfeiter.kevs || 0) - penalty);
+        await forfeiter.save();
+    }
+
+    if (opponent) {
+        opponent.kevs = (opponent.kevs || 0) + penalty;
+        applyXpGain(opponent, 20);
+        normalizeUserProgression(opponent);
+        await opponent.save();
+    }
 
     duel.status = 'completed';
     duel.winner = opponentId;

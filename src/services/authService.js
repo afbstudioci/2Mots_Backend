@@ -1,7 +1,7 @@
-//src/services/authService.js
 const User = require('../models/User');
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
+const { normalizeUserProgression } = require('../utils/gameHelpers');
 
 const JWT_SECRET = process.env.JWT_SECRET || 'secret';
 const JWT_REFRESH_SECRET = process.env.JWT_REFRESH_SECRET || 'refresh_secret';
@@ -16,20 +16,14 @@ const generateTokens = (userId) => {
 const calculateUserRank = async (user) => {
     const hasPlayed = (user.bestScore || 0) > 0 || (user.xp || 0) > 0 || (user.level || 1) > 1;
     if (!hasPlayed) return null;
-
-    const userLevel = user.level || 1;
-    const userXp = user.xp || 0;
-    const userBestScore = user.bestScore || 0;
-
     const countBetter = await User.countDocuments({
         isBanned: false,
         $or: [
-            { level: { $gt: userLevel } },
-            { level: userLevel, xp: { $gt: userXp } },
-            { level: userLevel, xp: userXp, bestScore: { $gt: userBestScore } }
+            { level: { $gt: user.level || 1 } },
+            { level: user.level || 1, xp: { $gt: user.xp || 0 } },
+            { level: user.level || 1, xp: user.xp || 0, bestScore: { $gt: user.bestScore || 0 } }
         ]
     });
-
     return countBetter + 1;
 };
 
@@ -169,14 +163,18 @@ exports.logoutUser = async (userId) => {
 };
 
 exports.getUserProfile = async (userId) => {
-    const user = await User.findById(userId).lean();
+    const user = await User.findById(userId);
     if (!user) {
         throw new Error('Utilisateur non trouvé');
     }
+    if (normalizeUserProgression(user)) {
+        await user.save().catch(() => {});
+    }
     const rank = await calculateUserRank(user);
-    delete user.password;
-    delete user.refreshTokens;
-    return { ...user, rank };
+    const userObj = user.toObject();
+    delete userObj.password;
+    delete userObj.refreshTokens;
+    return { ...userObj, rank };
 };
 
 exports.updateUserProfile = async (userId, { login, email, currentPassword, newPassword, avatarUrl }) => {
