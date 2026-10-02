@@ -1,7 +1,11 @@
-//src/services/duelEngine.js
+// src/services/duelEngine.js
+// MOTEUR D'EXECUTION ET D'ARBITRAGE DES DUELS TEMPS REEL
+// Standard : Bank Grade / Clean Architecture (Strict <= 270 lignes, Sans Emojis)
+
 const DuelSession = require('../models/DuelSession');
 const User = require('../models/User');
 const happyHourService = require('./happyHourService');
+const presenceService = require('./presenceService');
 
 exports.startDuelGame = async (duelId) => {
     const duel = await DuelSession.findById(duelId)
@@ -61,14 +65,14 @@ exports.releaseBuzzer = async (duelId) => {
 
 exports.submitAnswer = async (duelId, userId, answer) => {
     const duel = await DuelSession.findOne({ _id: duelId, status: 'in_progress' });
-    if (!duel) throw new Error('Duel introuvable ou terminé.');
+    if (!duel) throw new Error('Duel introuvable ou termine.');
 
     if (!duel.activeBuzzer?.userId || String(duel.activeBuzzer.userId) !== String(userId)) {
         throw new Error('Vous n\'avez pas la main sur le buzzer.');
     }
 
     const currentEnigma = duel.enigmas[duel.currentEnigmaIndex];
-    if (!currentEnigma) throw new Error('Énigme actuelle introuvable.');
+    if (!currentEnigma) throw new Error('Enigme actuelle introuvable.');
 
     const isCorrect = String(answer || '').trim().toUpperCase() === String(currentEnigma.answer).trim().toUpperCase();
     const isChallenger = String(userId) === String(duel.challenger);
@@ -128,17 +132,21 @@ exports.finishDuel = async (duelId) => {
     if (duel.scores.challenger > duel.scores.opponent) {
         duel.winner = duel.challenger;
         duel.isDraw = false;
-        await Promise.all([
-            User.updateOne({ _id: duel.opponent }, { $inc: { kevs: -duel.betAmount } }),
-            User.updateOne({ _id: duel.challenger }, { $inc: { kevs: duel.betAmount, xp: winXp } })
+        const [uOpp, uChal] = await Promise.all([
+            User.findByIdAndUpdate(duel.opponent, { $inc: { kevs: -duel.betAmount } }, { new: true }),
+            User.findByIdAndUpdate(duel.challenger, { $inc: { kevs: duel.betAmount, xp: winXp } }, { new: true })
         ]);
+        if (uOpp) presenceService.emitBalanceUpdate(duel.opponent, uOpp);
+        if (uChal) presenceService.emitBalanceUpdate(duel.challenger, uChal);
     } else if (duel.scores.opponent > duel.scores.challenger) {
         duel.winner = duel.opponent;
         duel.isDraw = false;
-        await Promise.all([
-            User.updateOne({ _id: duel.challenger }, { $inc: { kevs: -duel.betAmount } }),
-            User.updateOne({ _id: duel.opponent }, { $inc: { kevs: duel.betAmount, xp: winXp } })
+        const [uChal, uOpp] = await Promise.all([
+            User.findByIdAndUpdate(duel.challenger, { $inc: { kevs: -duel.betAmount } }, { new: true }),
+            User.findByIdAndUpdate(duel.opponent, { $inc: { kevs: duel.betAmount, xp: winXp } }, { new: true })
         ]);
+        if (uChal) presenceService.emitBalanceUpdate(duel.challenger, uChal);
+        if (uOpp) presenceService.emitBalanceUpdate(duel.opponent, uOpp);
     } else {
         duel.isDraw = true;
         duel.winner = null;

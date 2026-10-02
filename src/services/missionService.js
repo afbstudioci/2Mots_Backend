@@ -1,7 +1,11 @@
-﻿//src/services/missionService.js
+// src/services/missionService.js
+// SERVICE METIER DES MISSIONS QUOTIDIENNES ET DES RECOMPENSES
+// Standard : Bank Grade / Clean Architecture (Strict <= 270 lignes, Sans Emojis)
+
 const Mission = require('../models/Mission');
 const UserMission = require('../models/UserMission');
 const User = require('../models/User');
+const presenceService = require('./presenceService');
 
 const DEFAULT_MISSIONS = [
   { title: "Maitre des Mots", desc: "Trouvez 5 enigmes avec succes", reward: 5, targetValue: 5, targetType: "words_solved", isActive: true },
@@ -16,7 +20,7 @@ const seedMissionsIfEmpty = async () => {
     if (count === 0) {
       await Mission.insertMany(DEFAULT_MISSIONS);
     }
-  } catch (e) {}
+  } catch (e) { }
 };
 
 exports.ensureUserMissions = async (userId) => {
@@ -82,7 +86,7 @@ exports.updateMissionProgress = async (userId, targetType, increment = 1) => {
         await um.save();
       }
     }
-  } catch (e) {}
+  } catch (e) { }
 };
 
 exports.claimMissionReward = async (userId, missionId) => {
@@ -93,10 +97,11 @@ exports.claimMissionReward = async (userId, missionId) => {
   ).populate('mission');
 
   if (!updatedMission) {
-    throw new Error('Mission non complétée, déjà réclamée ou inexistante');
+    throw new Error('Mission non completee, deja reclamee ou inexistante');
   }
 
   const reward = (updatedMission.mission && updatedMission.mission.reward) || 5;
   const user = await User.findByIdAndUpdate(userId, { $inc: { kevs: reward } }, { new: true });
+  if (user) presenceService.emitBalanceUpdate(userId, user);
   return { newKevs: user?.kevs || 0 };
 };

@@ -1,5 +1,5 @@
 // src/services/presenceService.js
-// SERVICE DE GESTION DE PRESENCE TEMPS REEL (SOCKET.IO) - 2MOTS
+// SERVICE DE GESTION DE PRESENCE ET DIFFUSION TEMPS REEL (SOCKET.IO) - 2MOTS
 // Clean Architecture / Bank Grade (Strict <= 270 lignes, Sans Emojis)
 
 const userSockets = new Map(); // userId -> Set of socketIds
@@ -9,6 +9,26 @@ let ioInstance = null;
 
 exports.setIo = (io) => {
     ioInstance = io;
+};
+
+exports.getIo = () => ioInstance;
+
+exports.emitToUser = (userId, event, data) => {
+    if (!userId || !ioInstance) return;
+    ioInstance.to(String(userId)).emit(event, data);
+};
+
+exports.emitBalanceUpdate = (userId, userDoc) => {
+    if (!userId || !ioInstance || !userDoc) return;
+    ioInstance.to(String(userId)).emit('user_balance_updated', {
+        kevs: userDoc.kevs ?? 0,
+        streakFreezes: userDoc.streakFreezes ?? 0,
+        inventory: userDoc.inventory,
+        level: userDoc.level ?? 1,
+        xp: userDoc.xp ?? 0,
+        kevyKeys: userDoc.kevyKeys ?? 0,
+        isVip: Boolean(userDoc.isVip),
+    });
 };
 
 exports.addUserSocket = (userId, socketId) => {
@@ -24,7 +44,6 @@ exports.addUserSocket = (userId, socketId) => {
     set.add(socketId);
     socketUser.set(socketId, strUserId);
 
-    // Si l'utilisateur vient de passer en ligne, on diffuse l'evenement
     if (wasOffline && ioInstance) {
         ioInstance.emit('user_presence_change', {
             userId: strUserId,
@@ -44,7 +63,6 @@ exports.removeUserSocket = (socketId) => {
 
         if (set.size === 0) {
             userSockets.delete(strUserId);
-            // Utilisateur completement deconnecte
             if (ioInstance) {
                 ioInstance.emit('user_presence_change', {
                     userId: strUserId,

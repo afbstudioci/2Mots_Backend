@@ -3,6 +3,7 @@
 // Standard : Bank Grade / Clean Architecture (Strict <= 270 lignes, Sans Emojis)
 
 const User = require('../models/User');
+const presenceService = require('./presenceService');
 
 const DAILY_LIMIT = 5;
 const COOLDOWN_MS = 10 * 60 * 1000; // 10 minutes en millisecondes
@@ -91,13 +92,13 @@ exports.claimShopReward = async (userId) => {
     throw createError(`Veuillez patienter encore ${remainingMin} minute(s) avant la prochaine vidéo.`, 400);
   }
 
-  // Application atomique et sécurisée de la récompense
   user.kevs = (user.kevs || 0) + SHOP_REWARD_KEVS;
   user.adRewards.dailyShopCount = (user.adRewards.dailyShopCount || 0) + 1;
   user.adRewards.lastShopWatchedAt = new Date();
   user.adRewards.totalAdsWatched = (user.adRewards.totalAdsWatched || 0) + 1;
 
   await user.save();
+  presenceService.emitBalanceUpdate(userId, user);
 
   const remaining = DAILY_LIMIT - user.adRewards.dailyShopCount;
 
@@ -120,6 +121,7 @@ exports.claimSecondChance = async (userId) => {
   normalizeUserAdRewards(user);
   user.adRewards.totalAdsWatched = (user.adRewards.totalAdsWatched || 0) + 1;
   await user.save();
+  presenceService.emitBalanceUpdate(userId, user);
 
   return {
     success: true,
@@ -143,6 +145,7 @@ exports.claimDoubleKevs = async (userId, sessionKevs) => {
   user.kevs = (user.kevs || 0) + kevsToAdd;
   user.adRewards.totalAdsWatched = (user.adRewards.totalAdsWatched || 0) + 1;
   await user.save();
+  presenceService.emitBalanceUpdate(userId, user);
 
   return {
     success: true,
@@ -165,6 +168,7 @@ exports.claimEmergencyBooster = async (userId, boosterType) => {
   normalizeUserAdRewards(user);
   user.adRewards.totalAdsWatched = (user.adRewards.totalAdsWatched || 0) + 1;
   await user.save();
+  presenceService.emitBalanceUpdate(userId, user);
 
   return {
     success: true,

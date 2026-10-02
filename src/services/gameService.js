@@ -7,6 +7,7 @@ const User = require('../models/User');
 const missionService = require('./missionService');
 const vaultService = require('./vaultService');
 const happyHourService = require('./happyHourService');
+const presenceService = require('./presenceService');
 const { FALLBACK_VERBS, FALLBACK_NOUNS, FALLBACK_ADJ } = require('../utils/gameFallbacks');
 const {
   normalizeText,
@@ -73,7 +74,7 @@ const checkAnswerRealtime = async (userId, wordPairId, userAnswer, timeSpent) =>
   if (isCorrect) {
     await missionService.updateMissionProgress(userId, 'words_solved');
     const hhMultiplier = happyHourService.getHappyHourMultiplier();
-    const { totalMultiplier, isVip, vipMultiplier } = getGameMultipliers(user, hhMultiplier);
+    const { totalMultiplier } = getGameMultipliers(user, hhMultiplier);
     isFastCombo = timeSpent <= 3.5;
     const totalSolved = (user.playedWords ? user.playedWords.length : 0) + 1;
     const baseKevs = isFastCombo ? 1 : (totalSolved % 2 === 0 ? 1 : 0);
@@ -106,12 +107,11 @@ const checkAnswerRealtime = async (userId, wordPairId, userAnswer, timeSpent) =>
     } else if (latest.level === user.level && latest.xp > user.xp) {
       user.xp = latest.xp;
     }
-    if (latest.kevs > user.kevs) {
-      user.kevs = latest.kevs;
-    }
+    if (latest.kevs > user.kevs) user.kevs = latest.kevs;
   }
 
   await user.save();
+  presenceService.emitBalanceUpdate(userId, user);
   const officialAnswer = (resolvedPair.exactMatch && resolvedPair.exactMatch[0]) || resolvedPair.word1;
 
   return {
@@ -137,6 +137,7 @@ const useHint = async (userId) => {
   if (user.kevs < 5) throw createError('Kevs insuffisants. 5 Kevs requis.', 400);
   user.kevs -= 5;
   await user.save();
+  presenceService.emitBalanceUpdate(userId, user);
   return { kevs: user.kevs };
 };
 
@@ -165,7 +166,7 @@ const validateFinalSession = async (userId, sessionData = {}) => {
             word1: pair.word1,
             word2: pair.word2,
             expectedAnswer: (pair.exactMatch && pair.exactMatch[0]) || 'Inconnu',
-            userAnswer: item.answer || 'Temps écoulé',
+            userAnswer: item.answer || 'Temps ecoule',
           });
         }
       }
@@ -179,16 +180,9 @@ const validateFinalSession = async (userId, sessionData = {}) => {
   const hhMultiplier = happyHourService.getHappyHourMultiplier();
   const { isVip, vipMultiplier, totalMultiplier } = getGameMultipliers(user, hhMultiplier);
 
-  // Recalcul sécurisé des gains de session avec multiplicateur VIP x2
   let sessionEarnedKevs = sessionBaseKevs * totalMultiplier;
-  if (typeof bonusKevs === 'number' && bonusKevs > 0) {
-    sessionEarnedKevs += bonusKevs;
-  }
-
-  // Si des gains de session sont calculés, mise à jour atomique sécurisée
-  if (sessionEarnedKevs > 0) {
-    user.kevs = (user.kevs || 0) + sessionEarnedKevs;
-  }
+  if (typeof bonusKevs === 'number' && bonusKevs > 0) sessionEarnedKevs += bonusKevs;
+  if (sessionEarnedKevs > 0) user.kevs = (user.kevs || 0) + sessionEarnedKevs;
 
   if (typeof clientLevel === 'number' && clientLevel > (user.level || 1)) {
     user.level = clientLevel;
@@ -198,6 +192,7 @@ const validateFinalSession = async (userId, sessionData = {}) => {
   }
 
   await user.save();
+  presenceService.emitBalanceUpdate(userId, user);
 
   return {
     totalScore: sessionScore,
@@ -230,6 +225,7 @@ const syncLevel = async (userId, level, xp, kevs) => {
     { new: true }
   );
   const user = updated || (await User.findById(userId));
+  presenceService.emitBalanceUpdate(userId, user);
   return { level: user.level, xp: user.xp, kevs: user.kevs };
 };
 
@@ -257,6 +253,7 @@ const syncOfflineSession = async (userId, sessionData) => {
   user.kevs = (user.kevs || 0) + earnedKevs;
   if (calculatedScore > (user.bestScore || 0)) user.bestScore = calculatedScore;
   await user.save();
+  presenceService.emitBalanceUpdate(userId, user);
 
   return {
     synced: true,
@@ -273,6 +270,7 @@ const claimChestReward = async (userId, gains) => {
   user.kevyKeys = 0;
   if (gains && typeof gains.kevs === 'number' && gains.kevs > 0) user.kevs = (user.kevs || 0) + gains.kevs;
   await user.save();
+  presenceService.emitBalanceUpdate(userId, user);
   return { kevyKeys: 0, kevs: user.kevs };
 };
 
@@ -282,6 +280,7 @@ const syncUserKeys = async (userId, kevyKeys) => {
   if (typeof kevyKeys === 'number' && kevyKeys >= 0 && kevyKeys <= 3) {
     user.kevyKeys = kevyKeys;
     await user.save();
+    presenceService.emitBalanceUpdate(userId, user);
   }
   return { kevyKeys: user.kevyKeys };
 };

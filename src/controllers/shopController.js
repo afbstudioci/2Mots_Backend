@@ -1,5 +1,9 @@
-//src/controllers/shopController.js
+// src/controllers/shopController.js
+// CONTROLEUR DE GESTION DE LA BOUTIQUE ET DES ACHATS
+// Standard : Bank Grade / Clean Architecture (Strict <= 270 lignes, Sans Emojis)
+
 const User = require('../models/User');
+const presenceService = require('../services/presenceService');
 
 const CATALOG = {
     vip: {
@@ -124,6 +128,7 @@ exports.buyWithKevs = async (req, res) => {
 
         user.markModified('inventory');
         await user.save();
+        presenceService.emitBalanceUpdate(user._id, user);
 
         return res.status(200).json({
             status: 'success',
@@ -165,6 +170,7 @@ exports.verifyInAppPurchase = async (req, res) => {
 
         user.markModified('inventory');
         await user.save();
+        presenceService.emitBalanceUpdate(user._id, user);
 
         return res.status(200).json({
             status: 'success',
@@ -206,6 +212,7 @@ exports.useBooster = async (req, res) => {
 
         user.markModified('inventory');
         await user.save();
+        presenceService.emitBalanceUpdate(user._id, user);
 
         return res.status(200).json({
             status: 'success',
