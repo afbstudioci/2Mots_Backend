@@ -49,6 +49,18 @@ exports.getActiveDuel = async (req, res, next) => {
     }
 };
 
+exports.getLobbyBootstrap = async (req, res, next) => {
+    try {
+        const data = await duelService.getLobbyBootstrap(req.user._id);
+        res.status(200).json({
+            status: 'success',
+            data
+        });
+    } catch (error) {
+        next(error);
+    }
+};
+
 exports.createInvite = async (req, res, next) => {
     try {
         const parsed = inviteSchema.safeParse(req.body);

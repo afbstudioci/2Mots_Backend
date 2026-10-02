@@ -76,6 +76,8 @@ const duelSessionSchema = new mongoose.Schema({
 
 duelSessionSchema.index({ status: 1, createdAt: -1 });
 duelSessionSchema.index({ challenger: 1, opponent: 1, status: 1 });
+duelSessionSchema.index({ opponent: 1, status: 1, createdAt: -1 });
+duelSessionSchema.index({ challenger: 1, status: 1, createdAt: -1 });
 
 const DuelSession = mongoose.model('DuelSession', duelSessionSchema);
 module.exports = DuelSession;

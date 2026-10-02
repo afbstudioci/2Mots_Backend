@@ -30,6 +30,7 @@ const friendshipSchema = new mongoose.Schema({
 
 // Empêcher d'avoir plusieurs relations entre les deux mêmes personnes
 friendshipSchema.index({ users: 1 });
+friendshipSchema.index({ users: 1, status: 1 });
 
 const Friendship = mongoose.model('Friendship', friendshipSchema);
 module.exports = Friendship;

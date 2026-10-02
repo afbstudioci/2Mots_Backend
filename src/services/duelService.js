@@ -8,24 +8,45 @@ const duelEngine = require('./duelEngine');
 const presenceService = require('./presenceService');
 const { applyXpGain, normalizeUserProgression, shuffleArray } = require('../utils/gameHelpers');
 
-exports.getEligibleOpponents = async (userId) => {
-    const friendships = await Friendship.find({
-        $or: [{ requester: userId }, { recipient: userId }],
-        status: 'accepted'
-    }).lean();
+let cachedEligibleUsers = null;
+let lastEligibleFetch = 0;
+const ELIGIBLE_CACHE_TTL = 30 * 1000;
 
-    const friendIds = friendships.map(f => String(f.requester) === String(userId) ? f.recipient : f.requester);
-    const eligibleUsers = await User.find({ _id: { $ne: userId }, level: { $gte: 5 }, isBanned: false })
+const getCachedBaseUsers = async () => {
+    const now = Date.now();
+    if (cachedEligibleUsers && (now - lastEligibleFetch) < ELIGIBLE_CACHE_TTL) {
+        return cachedEligibleUsers;
+    }
+    const users = await User.find({ level: { $gte: 5 }, isBanned: false })
         .select('login avatar level bestScore isVip equippedFrame')
         .sort({ level: -1 })
-        .limit(50)
+        .limit(60)
         .lean();
+    cachedEligibleUsers = users;
+    lastEligibleFetch = now;
+    return users;
+};
 
-    return eligibleUsers
-        .map(user => ({
-            ...user,
-            isFriend: friendIds.some(fid => String(fid) === String(user._id)),
-            isOnline: presenceService.isUserOnline(user._id)
+exports.getEligibleOpponents = async (userId) => {
+    const [baseUsers, friendships] = await Promise.all([
+        getCachedBaseUsers(),
+        Friendship.find({ users: userId, status: 'accepted' }).select('users').lean()
+    ]);
+
+    const friendIdSet = new Set();
+    friendships.forEach(f => {
+        (f.users || []).forEach(u => {
+            if (String(u) !== String(userId)) friendIdSet.add(String(u));
+        });
+    });
+
+    return baseUsers
+        .filter(u => String(u._id) !== String(userId))
+        .slice(0, 50)
+        .map(u => ({
+            ...u,
+            isFriend: friendIdSet.has(String(u._id)),
+            isOnline: presenceService.isUserOnline(u._id)
         }))
         .sort((a, b) => (b.isOnline - a.isOnline) || (b.isFriend - a.isFriend) || (b.level - a.level));
 };
@@ -53,20 +74,15 @@ exports.createDuelInvite = async (challengerId, opponentId, betAmount) => {
 
 exports.respondToDuelInvite = async (opponentId, duelId, accept) => {
     const duel = await DuelSession.findOne({ _id: duelId, opponent: opponentId, status: 'pending' })
-        .populate('challenger', 'login avatar kevs level')
-        .populate('opponent', 'login avatar kevs level');
+        .populate('challenger opponent', 'login avatar kevs level');
 
-    if (!duel) {
-        throw new Error('Invitation de duel introuvable ou déjà traitée.');
-    }
+    if (!duel) throw new Error('Invitation de duel introuvable ou déjà traitée.');
 
     if (!accept) {
         duel.status = 'rejected';
         duel.endedAt = new Date();
         await duel.save();
-        try {
-            await notificationService.onDuelRejected(duel.challenger._id, duel.opponent.login);
-        } catch { }
+        try { await notificationService.onDuelRejected(duel.challenger._id, duel.opponent.login); } catch {}
         return { status: 'rejected', duelId: duel._id, challenger: duel.challenger };
     }
 
@@ -80,7 +96,6 @@ exports.respondToDuelInvite = async (opponentId, duelId, accept) => {
         await duel.save();
         throw new Error('Le challenger n\'a plus assez de Kevs pour ce duel.');
     }
-
     if (!opponentUser || opponentUser.kevs < duel.betAmount) {
         duel.status = 'cancelled';
         await duel.save();
@@ -92,11 +107,7 @@ exports.respondToDuelInvite = async (opponentId, duelId, accept) => {
         const answer = String(item.exactMatch?.[0] || item.answer || 'REPONSE').toUpperCase();
         const propositions = Array.isArray(item.options) && item.options.length >= 3
             ? item.options.map(p => String(p).toUpperCase())
-            : shuffleArray([
-                answer,
-                String(item.distractors?.[0] || 'CHOIX1').toUpperCase(),
-                String(item.distractors?.[1] || 'CHOIX2').toUpperCase()
-            ]);
+            : shuffleArray([answer, String(item.distractors?.[0] || 'CHOIX1').toUpperCase(), String(item.distractors?.[1] || 'CHOIX2').toUpperCase()]);
 
         return {
             enigmaId: String(item._id || `enigma_${index}`),
@@ -115,18 +126,11 @@ exports.respondToDuelInvite = async (opponentId, duelId, accept) => {
     duel.startedAt = null;
     await duel.save();
 
-    // Notification Push + Socket vers le challenger pour le reveiller et l'inviter a rejoindre l'arene
     try {
-        await notificationService.onDuelAccepted(
-            duel.challenger._id,
-            duel.opponent.login,
-            duel._id,
-            duel.opponent._id
-        );
+        await notificationService.onDuelAccepted(duel.challenger._id, duel.opponent.login, duel._id, duel.opponent._id);
     } catch (e) {
         console.warn('[DUEL] Erreur notification push acceptation:', e.message);
     }
-
     return duel;
 };
 
@@ -155,17 +159,18 @@ exports.getActiveDuel = async (userId) => {
             return null;
         }
     }
-
     return activeDuel;
 };
 
 exports.getUserInvites = async (userId) => {
     const cutoff = new Date(Date.now() - 24 * 60 * 60 * 1000);
-    // Nettoyage automatique en arrière-plan des invitations en attente périmées
-    await DuelSession.updateMany(
-        { status: 'pending', createdAt: { $lt: cutoff } },
-        { $set: { status: 'cancelled', endedAt: new Date() } }
-    ).catch(() => {});
+    // Nettoyage asynchrone non-bloquant des invitations périmées
+    setImmediate(() => {
+        DuelSession.updateMany(
+            { status: 'pending', createdAt: { $lt: cutoff } },
+            { $set: { status: 'cancelled', endedAt: new Date() } }
+        ).catch(() => {});
+    });
 
     const [received, sent] = await Promise.all([
         DuelSession.find({ opponent: userId, status: 'pending', createdAt: { $gte: cutoff } })
@@ -180,11 +185,18 @@ exports.getUserInvites = async (userId) => {
     return { received, sent };
 };
 
+exports.getLobbyBootstrap = async (userId) => {
+    const [opponents, invites, activeDuel] = await Promise.all([
+        exports.getEligibleOpponents(userId),
+        exports.getUserInvites(userId),
+        exports.getActiveDuel(userId)
+    ]);
+    return { opponents, invites, activeDuel };
+};
+
 exports.cancelDuelInvite = async (challengerId, duelId) => {
     const duel = await DuelSession.findOne({ _id: duelId, challenger: challengerId, status: 'pending' });
-    if (!duel) {
-        throw new Error('Invitation introuvable ou déjà traitée.');
-    }
+    if (!duel) throw new Error('Invitation introuvable ou déjà traitée.');
     duel.status = 'cancelled';
     duel.endedAt = new Date();
     await duel.save();
@@ -197,15 +209,10 @@ exports.cancelInactiveDuel = async (userId, duelId) => {
         $or: [{ challenger: userId }, { opponent: userId }],
         status: { $in: ['ready', 'pending'] }
     });
-
-    if (!duel) {
-        throw new Error('Duel introuvable ou déjà démarré.');
-    }
-
+    if (!duel) throw new Error('Duel introuvable ou déjà démarré.');
     duel.status = 'cancelled';
     duel.endedAt = new Date();
     await duel.save();
-
     return duel;
 };
 
@@ -215,28 +222,18 @@ exports.forfeitDuel = async (userId, duelId) => {
         $or: [{ challenger: userId }, { opponent: userId }],
         status: { $in: ['ready', 'in_progress', 'pending'] }
     });
-
-    if (!duel) {
-        throw new Error('Duel introuvable ou déjà terminé.');
-    }
+    if (!duel) throw new Error('Duel introuvable ou déjà terminé.');
 
     const isChallenger = String(userId) === String(duel.challenger);
     const forfeiterId = String(userId);
     const opponentId = String(isChallenger ? duel.opponent : duel.challenger);
-
-    // Pénalité stricte de 15% de la mise (Minimum 1 Kev)
     const penalty = Math.max(1, Math.ceil(duel.betAmount * 0.15));
 
-    const [forfeiter, opponent] = await Promise.all([
-        User.findById(forfeiterId),
-        User.findById(opponentId)
-    ]);
-
+    const [forfeiter, opponent] = await Promise.all([User.findById(forfeiterId), User.findById(opponentId)]);
     if (forfeiter) {
         forfeiter.kevs = Math.max(0, (forfeiter.kevs || 0) - penalty);
         await forfeiter.save();
     }
-
     if (opponent) {
         opponent.kevs = (opponent.kevs || 0) + penalty;
         applyXpGain(opponent, 20);
@@ -249,9 +246,7 @@ exports.forfeitDuel = async (userId, duelId) => {
     duel.endedAt = new Date();
     await duel.save();
 
-    const populatedDuel = await DuelSession.findById(duel._id)
-        .populate('challenger opponent winner', 'login avatar level');
-
+    const populatedDuel = await DuelSession.findById(duel._id).populate('challenger opponent winner', 'login avatar level');
     return {
         duel: populatedDuel,
         forfeiterId,
@@ -261,7 +256,6 @@ exports.forfeitDuel = async (userId, duelId) => {
     };
 };
 
-// Re-export arena gameplay engine methods
 exports.startDuelGame = duelEngine.startDuelGame;
 exports.handleBuzzer = duelEngine.handleBuzzer;
 exports.releaseBuzzer = duelEngine.releaseBuzzer;
