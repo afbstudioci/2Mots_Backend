@@ -16,10 +16,10 @@ exports.getAppConfig = async (req, res) => {
                 storeUrl: "https://play.google.com/store/apps/details?id=com.afbstudio.twomots"
             },
             contact: {
-                facebook: process.env.CONTACT_FACEBOOK || "https://facebook.com",
-                whatsapp: process.env.CONTACT_WHATSAPP || "https://wa.me/0000000000",
-                phone: process.env.CONTACT_PHONE || "+2250000000000",
-                email: process.env.CONTACT_EMAIL || "afbstudio@gmail.com"
+                facebook: process.env.CONTACT_FACEBOOK || "https://www.facebook.com/profile.php?id=61572155674109",
+                whatsapp: process.env.CONTACT_WHATSAPP || "https://wa.me/qr/DLQCUHPIVBYLE1",
+                phone: process.env.CONTACT_PHONE || "+2250768388770",
+                email: process.env.CONTACT_EMAIL || "contact2mots@gmail.com"
             },
             links: {
                 rules: process.env.LINK_RULES || "https://2mots.com/regles",
