@@ -96,17 +96,23 @@ exports.claimShopReward = async (userId) => {
   user.adRewards.dailyShopCount = (user.adRewards.dailyShopCount || 0) + 1;
   user.adRewards.lastShopWatchedAt = new Date();
   user.adRewards.totalAdsWatched = (user.adRewards.totalAdsWatched || 0) + 1;
+  user.markModified('adRewards');
 
   await user.save();
   presenceService.emitBalanceUpdate(userId, user);
 
-  const remaining = DAILY_LIMIT - user.adRewards.dailyShopCount;
+  const remaining = Math.max(0, DAILY_LIMIT - user.adRewards.dailyShopCount);
 
   return {
     success: true,
     addedKevs: SHOP_REWARD_KEVS,
     totalKevs: user.kevs,
     dailyRemaining: remaining,
+    dailyLimit: DAILY_LIMIT,
+    rewardKevs: SHOP_REWARD_KEVS,
+    inCooldown: true,
+    remainingCooldownSeconds: Math.ceil(COOLDOWN_MS / 1000),
+    canWatch: false,
     nextAvailableAt: new Date(Date.now() + COOLDOWN_MS).toISOString(),
   };
 };
