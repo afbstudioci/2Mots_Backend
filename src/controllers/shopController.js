@@ -79,39 +79,45 @@ exports.buyWithKevs = async (req, res) => {
             return res.status(404).json({ status: 'fail', message: 'Utilisateur introuvable.' });
         }
 
+        let itemCategory = category;
         let itemFound = null;
-        let itemCost = 0;
 
-        if (category === 'streaks') {
-            itemFound = CATALOG.streaks.find(s => s.id === itemId);
-            if (itemFound) itemCost = itemFound.priceKevs;
-        } else if (category === 'boosters') {
-            itemFound = CATALOG.boosters.find(b => b.id === itemId);
-            if (itemFound) itemCost = itemFound.priceKevs;
-        } else if (category === 'combos') {
-            itemFound = CATALOG.combos.find(c => c.id === itemId);
-            if (itemFound) itemCost = itemFound.priceKevs;
+        if (category && CATALOG[category]) {
+            itemFound = CATALOG[category].find(x => x.id === itemId);
+        }
+
+        if (!itemFound) {
+            for (const catKey of ['boosters', 'streaks', 'combos']) {
+                const found = CATALOG[catKey]?.find(x => x.id === itemId);
+                if (found) {
+                    itemFound = found;
+                    itemCategory = catKey;
+                    break;
+                }
+            }
         }
 
         if (!itemFound) {
             return res.status(400).json({ status: 'fail', message: 'Article inexistant.' });
         }
 
-        if (user.kevs < itemCost) {
+        const itemCost = Number(itemFound.priceKevs) || 0;
+
+        if ((user.kevs || 0) < itemCost) {
             return res.status(400).json({ status: 'fail', message: 'Solde de Kevs insuffisant.' });
         }
 
-        user.kevs -= itemCost;
+        user.kevs = Math.max(0, (user.kevs || 0) - itemCost);
 
         if (!user.inventory) user.inventory = { boosters: { timeFreeze: 0, superClue: 0, secondChance: 0 } };
         if (!user.inventory.boosters) user.inventory.boosters = { timeFreeze: 0, superClue: 0, secondChance: 0 };
 
-        if (category === 'streaks') {
-            user.streakFreezes = (user.streakFreezes || 0) + 3;
-        } else if (category === 'boosters') {
+        if (itemCategory === 'streaks') {
+            user.streakFreezes = (user.streakFreezes || 0) + (itemFound.count || 3);
+        } else if (itemCategory === 'boosters') {
             const currentCount = user.inventory.boosters[itemFound.type] || 0;
             user.inventory.boosters[itemFound.type] = currentCount + (itemFound.count || 1);
-        } else if (category === 'combos' && itemFound.rewards) {
+        } else if (itemCategory === 'combos' && itemFound.rewards) {
             if (itemFound.rewards.timeFreeze) {
                 user.inventory.boosters.timeFreeze = (user.inventory.boosters.timeFreeze || 0) + itemFound.rewards.timeFreeze;
             }
@@ -132,7 +138,7 @@ exports.buyWithKevs = async (req, res) => {
 
         return res.status(200).json({
             status: 'success',
-            message: 'Achat réussi : ' + itemFound.title,
+            message: 'Achat validé : ' + itemFound.title,
             data: {
                 userKevs: user.kevs,
                 streakFreezes: user.streakFreezes,
